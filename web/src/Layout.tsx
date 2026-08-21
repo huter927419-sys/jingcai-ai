@@ -7,6 +7,7 @@ type ExpertChip = { role: string };
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [experts, setExperts] = useState<ExpertChip[]>([]);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
+  const [durationDays, setDurationDays] = useState<number | null>(null);
   const [remaining, setRemaining] = useState(0);
 
   useEffect(() => {
@@ -27,7 +28,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     const sync = () => fetch("/api/access/status").then((r) => r.json()).then((j) => {
       if (!alive) return;
       setExpiresAt(j.authorized && j.expiresAt ? j.expiresAt : null);
-    }).catch(() => { if (alive) setExpiresAt(null); });
+      setDurationDays(j.authorized && j.durationDays ? Number(j.durationDays) : null);
+    }).catch(() => { if (alive) { setExpiresAt(null); setDurationDays(null); } });
     void sync();
     const poll = window.setInterval(sync, 30_000);
     return () => { alive = false; window.clearInterval(poll); };
@@ -74,7 +76,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <span><b>研判引擎</b><small>{experts.length ? `${experts.length} 个维度就绪` : "本地模式"}</small></span>
             <i />
           </div>
-          {remaining > 0 ? <div className={`access-remaining${remaining <= 86400 ? " soon" : ""}`} title={expiresAt ? `到期时间：${new Date(expiresAt).toLocaleString("zh-CN", { hour12: false })}` : ""}><span className="access-dot" />授权剩余 <b>{formatRemaining(remaining)}</b></div> : null}
+          {remaining > 0 ? <div className={`access-remaining${remaining <= 86400 ? " soon" : ""}`} title={expiresAt ? `到期时间：${new Date(expiresAt).toLocaleString("zh-CN", { hour12: false })}` : ""}><span className="access-dot" />{durationDays ? `${durationDays}天授权 · ` : ""}剩余 <b>{formatRemaining(remaining)}</b></div> : null}
         </div>
       </header>
       <div className="shell">

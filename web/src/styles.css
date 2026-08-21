@@ -1361,7 +1361,19 @@ h1 { font-size: 27px; font-weight: 720; color: var(--ink); margin: 0; letter-spa
 .admin-login { width: min(380px,100%); margin: 10vh auto; display: grid; gap: 12px; padding: 32px; background: #fff; border: 1px solid #dce6eb; border-radius: 10px; box-shadow: 0 15px 45px rgba(31,53,66,.08); }
 .admin-login h1 { margin: 0; color: #173d52; }.admin-login p:not(.eyebrow) { color: #6d7f87; margin: 0 0 10px; }
 .admin-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }.admin-head h1 { margin: 3px 0 0; color: #173d52; }
+.admin-pools { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+.admin-pool { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px 14px; border: 1px solid #dce6eb; border-radius: 8px; background: #fff; text-align: left; cursor: pointer; }
+.admin-pool span { color: #6a7c85; font-size: 11px; }
+.admin-pool b { color: #173d52; font: 720 22px var(--mono); line-height: 1.2; }
+.admin-pool small { color: #84949b; font-size: 11px; }
+.admin-pool.on { border-color: #24775e; background: #f0f9f5; box-shadow: inset 0 0 0 1px #24775e; }
+.admin-count { margin: 0 0 12px; color: #6a7c85; font-size: 12px; }
+.admin-empty { text-align: center !important; color: #84949b; padding: 28px 14px !important; }
+.admin-pager { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+.admin-pager .btn { min-width: 40px; height: 36px; padding: 0 12px; }
+.admin-pager span { color: #84949b; padding: 0 4px; }
 .admin-toolbar { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 16px; }.admin-toolbar input { min-width: 180px; }.admin-toolbar .btn { height: 40px; }
+@media (max-width: 900px) { .admin-pools { grid-template-columns: 1fr 1fr; } }
 .admin-message { color: #38705e; background: #eaf7f1; border: 1px solid #cceade; padding: 10px 12px; border-radius: 5px; }
 .admin-table-wrap { overflow-x: auto; background: #fff; border: 1px solid #dce6eb; border-radius: 8px; }
 .admin-table-wrap table { width: 100%; min-width: 820px; border-collapse: collapse; }.admin-table-wrap th, .admin-table-wrap td { text-align: left; padding: 13px 14px; border-bottom: 1px solid #edf1f3; white-space: nowrap; font-size: 13px; }.admin-table-wrap th { background: #f5f8fa; color: #637680; font-weight: 700; }.admin-table-wrap code { color: #173d52; font-weight: 700; letter-spacing: .07em; }

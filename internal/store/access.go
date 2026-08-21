@@ -170,16 +170,85 @@ func scanTime(v sql.NullString) *time.Time {
 	}
 	return &t
 }
-func (s *Store) ListAccessCodes(days int, status, search string, limit, offset int, now time.Time) ([]AccessCode, int, error) {
+
+type AccessPoolStat struct {
+	DurationDays int `json:"durationDays"`
+	Total        int `json:"total"`
+	Unused       int `json:"unused"`
+	Active       int `json:"active"`
+	Expired      int `json:"expired"`
+	Terminated   int `json:"terminated"`
+}
+
+func (s *Store) AccessPoolStats(now time.Time) ([]AccessPoolStat, error) {
+	stamp := now.UTC().Format(time.RFC3339Nano)
+	rows, err := s.DB.Query(`SELECT duration_days,
+		COUNT(*),
+		SUM(CASE WHEN activated_at IS NULL AND terminated_at IS NULL THEN 1 ELSE 0 END),
+		SUM(CASE WHEN activated_at IS NOT NULL AND terminated_at IS NULL AND expires_at>? THEN 1 ELSE 0 END),
+		SUM(CASE WHEN activated_at IS NOT NULL AND terminated_at IS NULL AND expires_at<=? THEN 1 ELSE 0 END),
+		SUM(CASE WHEN terminated_at IS NOT NULL THEN 1 ELSE 0 END)
+		FROM access_codes GROUP BY duration_days ORDER BY duration_days`, stamp, stamp)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	byDays := map[int]AccessPoolStat{}
+	for rows.Next() {
+		var st AccessPoolStat
+		if err = rows.Scan(&st.DurationDays, &st.Total, &st.Unused, &st.Active, &st.Expired, &st.Terminated); err != nil {
+			return nil, err
+		}
+		byDays[st.DurationDays] = st
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	out := make([]AccessPoolStat, 0, 4)
+	for _, d := range []int{3, 7, 15, 30} {
+		st := byDays[d]
+		st.DurationDays = d
+		out = append(out, st)
+	}
+	return out, nil
+}
+
+type AccessListResult struct {
+	Codes    []AccessCode `json:"codes"`
+	Total    int          `json:"total"`
+	Page     int          `json:"page"`
+	PageSize int          `json:"pageSize"`
+	Pages    int          `json:"pages"`
+}
+
+func clampAccessPage(page, size, total int) (int, int, int, int) {
+	if size != 20 && size != 50 && size != 100 {
+		size = 50
+	}
+	if page < 1 {
+		page = 1
+	}
+	pages := (total + size - 1) / size
+	if pages < 1 {
+		pages = 1
+	}
+	if page > pages {
+		page = pages
+	}
+	return page, size, (page - 1) * size, pages
+}
+
+func (s *Store) ListAccessCodes(days int, status, search string, page, pageSize int, now time.Time) (AccessListResult, error) {
 	where := []string{"1=1"}
 	args := []any{}
-	if days > 0 {
+	if days == 3 || days == 7 || days == 15 || days == 30 {
 		where = append(where, "duration_days=?")
 		args = append(args, days)
 	}
+	search = NormalizeCode(search)
 	if search != "" {
-		where = append(where, "code_display LIKE ?")
-		args = append(args, "%"+strings.ToUpper(search)+"%")
+		where = append(where, "REPLACE(code_display,'-','') LIKE ?")
+		args = append(args, "%"+search+"%")
 	}
 	switch status {
 	case "unused":
@@ -197,14 +266,15 @@ func (s *Store) ListAccessCodes(days int, status, search string, limit, offset i
 	qwhere := strings.Join(where, " AND ")
 	var total int
 	if err := s.DB.QueryRow(`SELECT COUNT(*) FROM access_codes WHERE `+qwhere, args...).Scan(&total); err != nil {
-		return nil, 0, err
+		return AccessListResult{}, err
 	}
-	query := `SELECT id,code_display,duration_days,` + statusExpr + `,created_at,activated_at,expires_at,terminated_at,last_seen_at,COALESCE(activation_ip,''),use_count FROM access_codes WHERE ` + qwhere + ` ORDER BY id DESC LIMIT ? OFFSET ?`
+	page, pageSize, offset, pages := clampAccessPage(page, pageSize, total)
+	query := `SELECT id,code_display,duration_days,` + statusExpr + `,created_at,activated_at,expires_at,terminated_at,last_seen_at,COALESCE(activation_ip,''),use_count FROM access_codes WHERE ` + qwhere + ` ORDER BY duration_days ASC, id DESC LIMIT ? OFFSET ?`
 	queryArgs := append([]any{now.UTC().Format(time.RFC3339Nano)}, args...)
-	queryArgs = append(queryArgs, limit, offset)
+	queryArgs = append(queryArgs, pageSize, offset)
 	rows, err := s.DB.Query(query, queryArgs...)
 	if err != nil {
-		return nil, 0, err
+		return AccessListResult{}, err
 	}
 	defer rows.Close()
 	out := []AccessCode{}
@@ -213,7 +283,7 @@ func (s *Store) ListAccessCodes(days int, status, search string, limit, offset i
 		var cr string
 		var a, e, t, l sql.NullString
 		if err = rows.Scan(&c.ID, &c.Code, &c.DurationDays, &c.Status, &cr, &a, &e, &t, &l, &c.ActivationIP, &c.UseCount); err != nil {
-			return nil, 0, err
+			return AccessListResult{}, err
 		}
 		c.CreatedAt, _ = time.Parse(time.RFC3339Nano, cr)
 		c.ActivatedAt = scanTime(a)
@@ -222,7 +292,10 @@ func (s *Store) ListAccessCodes(days int, status, search string, limit, offset i
 		c.LastSeenAt = scanTime(l)
 		out = append(out, c)
 	}
-	return out, total, rows.Err()
+	if err = rows.Err(); err != nil {
+		return AccessListResult{}, err
+	}
+	return AccessListResult{Codes: out, Total: total, Page: page, PageSize: pageSize, Pages: pages}, nil
 }
 
 func (s *Store) TerminateAccessCode(id int64, now time.Time) error {

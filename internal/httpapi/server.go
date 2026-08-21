@@ -169,13 +169,22 @@ func (s *Server) adminCodes(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "admin login required"})
 		return
 	}
-	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
-	list, total, e := s.Store.ListAccessCodes(days, r.URL.Query().Get("status"), r.URL.Query().Get("q"), 200, 0, time.Now())
+	now := time.Now()
+	q := r.URL.Query()
+	days, _ := strconv.Atoi(q.Get("days"))
+	page, _ := strconv.Atoi(q.Get("page"))
+	pageSize, _ := strconv.Atoi(q.Get("pageSize"))
+	list, e := s.Store.ListAccessCodes(days, q.Get("status"), q.Get("q"), page, pageSize, now)
 	if e != nil {
 		http.Error(w, e.Error(), 500)
 		return
 	}
-	writeJSON(w, 200, map[string]any{"codes": list, "total": total})
+	pools, e := s.Store.AccessPoolStats(now)
+	if e != nil {
+		http.Error(w, e.Error(), 500)
+		return
+	}
+	writeJSON(w, 200, map[string]any{"codes": list.Codes, "total": list.Total, "page": list.Page, "pageSize": list.PageSize, "pages": list.Pages, "pools": pools})
 }
 func (s *Server) adminGenerate(w http.ResponseWriter, r *http.Request) {
 	if !s.isAdmin(r) {
