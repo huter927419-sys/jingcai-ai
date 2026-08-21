@@ -52,15 +52,57 @@ type Betfair struct {
 	Note    string  `json:"note,omitempty"`
 }
 
+type EUNode struct {
+	Time string  `json:"time"`
+	H    float64 `json:"h"`
+	D    float64 `json:"d"`
+	A    float64 `json:"a"`
+}
+
+type EUBook struct {
+	CompanyID int      `json:"companyId"`
+	Company   string   `json:"company"`
+	Opening   *Trio    `json:"opening,omitempty"`
+	Current   *Trio    `json:"current,omitempty"`
+	Nodes     []EUNode `json:"nodes,omitempty"`
+}
+
+type LineNode struct {
+	Time   string  `json:"time"`
+	Line   string  `json:"line"`
+	Left   float64 `json:"left"`
+	Right  float64 `json:"right"`
+	Status string  `json:"status,omitempty"`
+}
+
+type LineMove struct {
+	CompanyID    int        `json:"companyId,omitempty"`
+	Company      string     `json:"company,omitempty"`
+	OpeningLine  string     `json:"openingLine,omitempty"`
+	CurrentLine  string     `json:"currentLine,omitempty"`
+	OpeningLeft  float64    `json:"openingLeft,omitempty"`
+	OpeningRight float64    `json:"openingRight,omitempty"`
+	CurrentLeft  float64    `json:"currentLeft,omitempty"`
+	CurrentRight float64    `json:"currentRight,omitempty"`
+	NodeCount    int        `json:"nodeCount,omitempty"`
+	Nodes        []LineNode `json:"nodes,omitempty"`
+}
+
 type Quote struct {
-	MatchID   int64     `json:"matchId"`
-	Fid       int64     `json:"fid,omitempty"`
-	FetchedAt time.Time `json:"fetchedAt"`
-	Company   string    `json:"company,omitempty"`
-	EU        *Trio     `json:"eu,omitempty"`
-	Asian     *Handicap `json:"asian,omitempty"`
-	OU        *OU       `json:"ou,omitempty"`
-	Betfair   *Betfair  `json:"betfair,omitempty"`
+	MatchID    int64      `json:"matchId"`
+	Fid        int64      `json:"fid,omitempty"`
+	TitanID    int64      `json:"titanId,omitempty"`
+	FetchedAt  time.Time  `json:"fetchedAt"`
+	Company    string     `json:"company,omitempty"`
+	EU         *Trio      `json:"eu,omitempty"`
+	Asian      *Handicap  `json:"asian,omitempty"`
+	OU         *OU        `json:"ou,omitempty"`
+	Betfair    *Betfair   `json:"betfair,omitempty"`
+	Books      []EUBook   `json:"books,omitempty"`
+	AsianMove  *LineMove  `json:"asianMove,omitempty"`
+	OUMove     *LineMove  `json:"ouMove,omitempty"`
+	AsianBooks []LineMove `json:"asianBooks,omitempty"`
+	OUBooks    []LineMove `json:"ouBooks,omitempty"`
 }
 
 func (q *Quote) FillImplied() {

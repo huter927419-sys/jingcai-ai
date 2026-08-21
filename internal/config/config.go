@@ -16,6 +16,7 @@ type Config struct {
 	DeepSeekModel  string
 	ShqbbKey       string
 	ShqbbBase      string
+	ClaudeKey      string
 	ClaudeModel    string
 	GPTModel       string
 	Listen         string
@@ -46,6 +47,7 @@ func Load() Config {
 		DeepSeekModel:  getenv("DEEPSEEK_MODEL", "deepseek-chat"),
 		ShqbbKey:       os.Getenv("SHQBB_API_KEY"),
 		ShqbbBase:      getenv("SHQBB_BASE_URL", "https://api.shqbb.com/v1"),
+		ClaudeKey:      firstEnv("CLAUDE_API_KEY", "SHQBB_API_KEY"),
 		ClaudeModel:    getenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001"),
 		GPTModel:       getenv("GPT_MODEL", "gpt-5.4-mini"),
 		Listen:         getenv("LISTEN_ADDR", ":8080"),
@@ -86,6 +88,15 @@ func getenv(k, def string) string {
 		return v
 	}
 	return def
+}
+
+func firstEnv(keys ...string) string {
+	for _, k := range keys {
+		if v := strings.TrimSpace(os.Getenv(k)); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func loadDotEnv(path string) {

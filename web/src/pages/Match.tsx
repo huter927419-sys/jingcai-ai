@@ -6,6 +6,7 @@ import {
   fmtKick,
   fmtPrice,
   fmtSigned,
+  playMarketRows,
   playRows,
   type EvalSide,
   type MatchDetail,
@@ -75,6 +76,9 @@ export default function Match() {
   }
 
   const m = data.match;
+  const sfc = m.origin === "sfc";
+  const backTo = sfc ? "/sfc" : m.finished ? "/results" : "/";
+  const backLabel = sfc ? "返回胜负彩" : m.finished ? "返回结果" : "返回今日";
   const sn = data.snapshot;
   const hasBoth = data.available.includes("open") && data.available.includes("close");
   const now = data.oddsClose || data.oddsOpen || sn?.odds;
@@ -96,8 +100,8 @@ export default function Match() {
 
   return (
     <Layout>
-      <Link className="back" to={m.finished ? "/results" : "/"}>
-        <IconBack size={14} /> {m.finished ? "返回结果" : "返回今日"}
+      <Link className="back" to={backTo}>
+        <IconBack size={14} /> {backLabel}
       </Link>
       <div className="page-head">
         <div>
@@ -152,9 +156,9 @@ export default function Match() {
           <EvidencePanel sn={sn} data={data} now={now} market={market} />
           <nav className="detail-index" aria-label="详情分析导航">
             <a href="#trend"><IconChart size={16} /><span><b>01 走势</b><small>概率 · 比分 · 阵容</small></span></a>
-            <a href="#ticket"><IconGrid size={16} /><span><b>02 票面</b><small>赔率 · 让球 · 变化</small></span></a>
-            <a href="#value"><IconScale size={16} /><span><b>03 价值研判™</b><small>价格 · 保护 · 等级</small></span></a>
-            <a href="#analysis"><IconTalk size={16} /><span><b>04 专业研判</b><small>格局 · 方向 · 风险</small></span></a>
+            <a href="#ticket"><IconGrid size={16} /><span><b>02 票面</b><small>{sfc ? "欧赔 · 亚盘 · 大小" : "赔率 · 让球 · 变化"}</small></span></a>
+            <a href="#analysis"><IconTalk size={16} /><span><b>03 专业研判</b><small>格局 · 方向 · 风险</small></span></a>
+            <a href="#value"><IconScale size={16} /><span><b>04 价值研判™</b><small>价格 · 保护 · 等级</small></span></a>
           </nav>
 
           <Layer id="trend" n="01" title="走势" hint="先看这场更常怎么结束，再看阵容能不能撑住这个判断。">
@@ -177,10 +181,15 @@ export default function Match() {
             </div>
           </Layer>
 
-          <Layer id="ticket" n="02" title="票面" hint="这里只看竞彩怎么卖。价值不看这组 SP。">
-            {data.oddsOpen && data.oddsClose ? <OddsMovement open={data.oddsOpen} close={data.oddsClose} /> : null}
-            <PlayOddsChart rows={rows} />
-            <TicketAdvice sn={sn} odds={now} />
+          <Layer id="ticket" n="02" title="票面" hint={sfc ? "本场没有竞彩票面，这里只看市场欧赔、亚盘和大小。" : "这里只看竞彩怎么卖。价值不看这组 SP。"}>
+            {sfc ? (
+              <PlayOddsChart rows={playMarketRows(market)} />
+            ) : (
+              <>
+                {data.oddsOpen && data.oddsClose ? <OddsMovement open={data.oddsOpen} close={data.oddsClose} /> : null}
+                <PlayOddsChart rows={rows} />
+              </>
+            )}
             {market?.betfair ? (
               <VolumeChart
                 home={market.betfair.homeVol}
@@ -189,28 +198,15 @@ export default function Match() {
                 thin={market.betfair.thin}
                 note={market.betfair.note}
               />
-            ) : (
+            ) : sfc ? null : (
               <div className="pred muted">必发还在采集。</div>
             )}
+            {market?.books?.length || market?.asianMove || market?.ouMove || market?.asianBooks?.length || market?.ouBooks?.length ? <MarketBooks market={market} /> : null}
             <RiskNotice tone="data">盘口、赔率与成交数据可能存在更新延迟或不同来源口径差异，临场变化会改变原有判断，请以实际出票时信息为准。</RiskNotice>
+            {sfc ? null : <TicketAdvice sn={sn} odds={now} />}
           </Layer>
 
-          <Layer id="value" n="03" title="价值研判™" hint="本系统独有的决策矩阵：判断方向，更判断当前价格是否值得执行。">
-            <ValueMatrix had={hadGates} ou={ouGates} asia={asiaGates} picked={picked} />
-            <div className="public-metrics">
-              <div className="public-metrics-head"><b>公开指标参考</b><span>价值差、凯利与判定区间用于辅助理解；专属权重和综合裁决逻辑不公开。</span></div>
-              <div className="eval-guide">
-                <ZoneLegend label="价值差" min={VALUE_SCALE.min} max={VALUE_SCALE.max} zones={VALUE_ZONES} />
-                <ZoneLegend label="凯利" min={KELLY_SCALE.min} max={KELLY_SCALE.max} zones={KELLY_ZONES} />
-              </div>
-              <GateBoard title="胜平负 · 指标明细" sides={hadGates} empty="Bet365 欧赔还在采集。" />
-              <GateBoard title="大小球 · 指标明细" sides={ouGates} empty="Bet365 大小还在采集。" />
-              <GateBoard title="亚洲盘 · 指标明细" sides={asiaGates} empty="Bet365 亚盘还在采集。" />
-            </div>
-            <RiskNotice>价值等级是基于当前数据的条件性判断，不代表结果承诺；市场快速变盘、阵容变化或突发事件均可能使结论失效。</RiskNotice>
-          </Layer>
-
-          <Layer id="analysis" n="04" title="专业研判" hint="综合盘口变化、阵型人员、比赛格局与价值变化，形成可执行结论。">
+          <Layer id="analysis" n="03" title="专业研判" hint="先对照上方竞彩基础参考，再看各位专家如何解释盘口、阵型和比赛格局。">
             {data.expertKind === "open" && sn.kind === "close" ? (
               <div className="expert-source-note">
                 <b>赛前研判留档</b>
@@ -225,6 +221,21 @@ export default function Match() {
               score={m.finished && m.homeGoals != null && m.awayGoals != null ? `${m.homeGoals}-${m.awayGoals}` : ""}
             />
             <RiskNotice strong>以上分析和参考买入仅供信息研究，不构成收益保证。请结合自身判断审慎决策，由此产生的相关风险与结果由使用者自行承担。</RiskNotice>
+          </Layer>
+
+          <Layer id="value" n="04" title="价值研判™" hint="本系统独有的决策矩阵：判断方向，更判断当前价格是否值得执行。">
+            <ValueMatrix had={hadGates} ou={ouGates} asia={asiaGates} picked={picked} />
+            <div className="public-metrics">
+              <div className="public-metrics-head"><b>公开指标参考</b><span>价值差、凯利与判定区间用于辅助理解；专属权重和综合裁决逻辑不公开。</span></div>
+              <div className="eval-guide">
+                <ZoneLegend label="价值差" min={VALUE_SCALE.min} max={VALUE_SCALE.max} zones={VALUE_ZONES} />
+                <ZoneLegend label="凯利" min={KELLY_SCALE.min} max={KELLY_SCALE.max} zones={KELLY_ZONES} />
+              </div>
+              <GateBoard title="胜平负 · 指标明细" sides={hadGates} empty="Bet365 欧赔还在采集。" />
+              <GateBoard title="大小球 · 指标明细" sides={ouGates} empty="Bet365 大小还在采集。" />
+              <GateBoard title="亚洲盘 · 指标明细" sides={asiaGates} empty="Bet365 亚盘还在采集。" />
+            </div>
+            <RiskNotice>价值等级是基于当前数据的条件性判断，不代表结果承诺；市场快速变盘、阵容变化或突发事件均可能使结论失效。</RiskNotice>
           </Layer>
         </>
       )}
@@ -394,6 +405,82 @@ function majority(values: string[]): string {
 function patternOf(sn: Snapshot): string {
   const side = sn.homeWin >= sn.awayWin ? "主队掌握更多主动权" : "客队反击空间更值得关注";
   return sn.over25 >= 52 ? `${side}，对攻倾向` : `${side}，节奏偏谨慎`;
+}
+
+function MarketBooks({ market }: { market: MarketQuote }) {
+  const books = market.books ?? [];
+  const ah = market.asianMove;
+  const ou = market.ouMove;
+  const asianBooks = market.asianBooks ?? [];
+  const ouBooks = market.ouBooks ?? [];
+  return (
+    <div className="block">
+      <div className="block-h">机构对照 · 初盘到即时</div>
+      {books.length ? (
+        <div className="book-table" role="table">
+          <div className="book-row head" role="row">
+            <span>公司</span><span>初赔 主/平/客</span><span>即时 主/平/客</span>
+          </div>
+          {books.map((b) => (
+            <div className="book-row" role="row" key={b.companyId}>
+              <span>{b.company}</span>
+              <span>{fmtTrio(b.opening)}</span>
+              <span>{fmtTrio(b.current)}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {asianBooks.length ? (
+        <div className="book-table" role="table">
+          <div className="book-row head" role="row">
+            <span>亚盘</span><span>初盘</span><span>即时</span>
+          </div>
+          {asianBooks.map((r, i) => (
+            <div className="book-row" role="row" key={`ah-${r.companyId || i}`}>
+              <span>{r.company}</span>
+              <span>{fmtLine(r.openingLine, r.openingLeft, r.openingRight)}</span>
+              <span>{fmtLine(r.currentLine, r.currentLeft, r.currentRight)}</span>
+            </div>
+          ))}
+        </div>
+      ) : ah?.openingLine || ah?.currentLine ? (
+        <p className="pred">澳门亚盘对照：初 {ah.openingLine} {fmtPair(ah.openingLeft, ah.openingRight)} → 即 {ah.currentLine} {fmtPair(ah.currentLeft, ah.currentRight)}。价值仍看上方 Bet365 亚盘。</p>
+      ) : null}
+      {ouBooks.length ? (
+        <div className="book-table" role="table">
+          <div className="book-row head" role="row">
+            <span>大小</span><span>初盘</span><span>即时</span>
+          </div>
+          {ouBooks.map((r, i) => (
+            <div className="book-row" role="row" key={`ou-${r.companyId || i}`}>
+              <span>{r.company}</span>
+              <span>{fmtLine(r.openingLine, r.openingLeft, r.openingRight)}</span>
+              <span>{fmtLine(r.currentLine, r.currentLeft, r.currentRight)}</span>
+            </div>
+          ))}
+        </div>
+      ) : ou?.openingLine || ou?.currentLine ? (
+        <p className="pred">澳门大小对照：初 {ou.openingLine} {fmtPair(ou.openingLeft, ou.openingRight)} → 即 {ou.currentLine} {fmtPair(ou.currentLeft, ou.currentRight)}。</p>
+      ) : null}
+      {asianBooks.length ? <p className="pred">亚盘价值仍看上方 Bet365；以上为多家机构盘路对照，给盘口解读用。</p> : null}
+    </div>
+  );
+}
+
+function fmtTrio(t?: { h?: number; d?: number; a?: number } | null): string {
+  if (!t || !t.h) return "—";
+  return `${t.h.toFixed(2)} / ${t.d?.toFixed(2)} / ${t.a?.toFixed(2)}`;
+}
+
+function fmtPair(a?: number, b?: number): string {
+  if (a == null || b == null || a <= 0) return "";
+  return `${a.toFixed(2)}/${b.toFixed(2)}`;
+}
+
+function fmtLine(line?: string, left?: number, right?: number): string {
+  if (!line) return "—";
+  const w = fmtPair(left, right);
+  return w ? `${line} ${w}` : line;
 }
 
 function OddsMovement({ open, close }: { open: OddsBoard; close: OddsBoard }) {

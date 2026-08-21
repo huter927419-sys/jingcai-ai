@@ -91,6 +91,10 @@ func (e *Engine) Run(m sporttery.Match, kind store.SnapshotKind) (Outcome, error
 		"ttg":  m.TTG,
 	})
 	sides, hc := eval.FromQuote(q, res, lh, la)
+	msig := ""
+	if q != nil {
+		msig = q.MarketSig()
+	}
 	err = e.Store.SaveSnapshot(store.Snapshot{
 		MatchID:    m.ID,
 		Kind:       kind,
@@ -107,6 +111,7 @@ func (e *Engine) Run(m sporttery.Match, kind store.SnapshotKind) (Outcome, error
 		UsedModels: usedModels,
 		Takes:      takesFromHits(hits, seed),
 		ExpertDone: true,
+		MarketSig:  msig,
 	})
 	return Outcome{UsedAI: usedAI}, err
 }
@@ -123,10 +128,20 @@ func (e *Engine) collectFor(m sporttery.Match, kind store.SnapshotKind, seed lam
 	if q == nil {
 		q, _ = e.Store.GetQuote(m.ID)
 	}
-	return e.collectWith(m, kind, seed, q, prev)
+	return e.collectWith(m, kind, seed, q, prev, false)
 }
 
-func (e *Engine) collectWith(m sporttery.Match, kind store.SnapshotKind, seed lambdaest.Seed, q *market.Quote, prev *market.Preview) []modelHit {
+func (e *Engine) collectSFC(m sporttery.Match, seed lambdaest.Seed, q *market.Quote, prev *market.Preview) []modelHit {
+	if prev == nil {
+		prev, _ = e.Store.GetPreview(m.ID)
+	}
+	if q == nil {
+		q, _ = e.Store.GetQuote(m.ID)
+	}
+	return e.collectWith(m, store.KindOpen, seed, q, prev, true)
+}
+
+func (e *Engine) collectWith(m sporttery.Match, kind store.SnapshotKind, seed lambdaest.Seed, q *market.Quote, prev *market.Preview, sfc bool) []modelHit {
 	var (
 		mu   sync.Mutex
 		wg   sync.WaitGroup
@@ -141,8 +156,18 @@ func (e *Engine) collectWith(m sporttery.Match, kind store.SnapshotKind, seed la
 			defer wg.Done()
 			role := experts.Of(c.Name)
 			p := buildRolePrompt(role, m, kind, seed, q, prev)
+			if sfc {
+				p = buildSFCRolePrompt(role, m, seed, q, prev)
+			}
 			if strings.Contains(strings.ToLower(c.Model), "claude") {
-				p = buildSoftRolePrompt(role, m, kind, seed, q, prev)
+				if sfc {
+					p = buildSFCSoftPrompt(role, m, seed, q, prev)
+				} else {
+					p = buildSoftRolePrompt(role, m, kind, seed, q, prev)
+				}
+			}
+			if role.Key == "market" {
+				p = buildMarketExpertPrompt(role, m, kind, seed, q, prev, sfc)
 			}
 			out, err := c.Analyze(p)
 			if err != nil {
@@ -241,22 +266,27 @@ func (e *Engine) fillTakes(id int64, kind store.SnapshotKind, allowEmptyDone boo
 		return nil, err
 	}
 	odds, ok := eval.MatchFromJSON(sn.OddsJSON)
-	if !ok {
+	sfc := row.Origin == "sfc"
+	if !ok && !sfc {
 		return nil, fmt.Errorf("no odds")
 	}
-	m := odds
-	m.ID = row.ID
-	m.NumStr = row.NumStr
-	m.League = row.League
-	m.LeagueAbb = row.LeagueAbb
-	m.Home = row.Home
-	m.Away = row.Away
-	m.Kickoff = row.Kickoff
-	m.BusinessDate = row.BusinessDate
-	seed := lambdaest.FromMatch(m)
+	m := sporttery.Match{ID: row.ID, NumStr: row.NumStr, League: row.League, LeagueAbb: row.LeagueAbb, Home: row.Home, Away: row.Away, Kickoff: row.Kickoff, BusinessDate: row.BusinessDate}
+	if ok {
+		m.HAD, m.TTG, m.HHAD, m.HHADLine = odds.HAD, odds.TTG, odds.HHAD, odds.HHADLine
+		m.HasHAD, m.HasTTG, m.HasHHAD = odds.HasHAD, odds.HasTTG, odds.HasHHAD
+	}
 	q, _ := e.Store.GetQuote(id)
 	prev, _ := e.Store.GetPreview(id)
-	hits := e.collectFor(m, sn.Kind, seed, q, prev)
+	seed := lambdaest.FromMatch(m)
+	if sfc && q != nil && q.EU != nil && q.EU.H > 1 {
+		seed = lambdaest.FromOdds(q.EU.H, q.EU.D, q.EU.A)
+	}
+	var hits []modelHit
+	if sfc {
+		hits = e.collectSFC(m, seed, q, prev)
+	} else {
+		hits = e.collectFor(m, sn.Kind, seed, q, prev)
+	}
 	sn.ExpertDone = true
 	if len(hits) == 0 {
 		_ = e.Store.SaveSnapshot(*sn)
@@ -268,6 +298,9 @@ func (e *Engine) fillTakes(id int64, kind store.SnapshotKind, allowEmptyDone boo
 		sn.UsedModels = append(sn.UsedModels, t.Name)
 	}
 	sn.UsedAI = true
+	if q != nil {
+		sn.MarketSig = q.MarketSig()
+	}
 	sn.FetchedAt = time.Now()
 	if err := e.Store.SaveSnapshot(*sn); err != nil {
 		return nil, err
@@ -372,14 +405,65 @@ func marketLine(q *market.Quote) string {
 	}
 	var b strings.Builder
 	if q.EU != nil && q.EU.H > 1 {
-		fmt.Fprintf(&b, "Bet365 欧赔 主 %.2f 平 %.2f 客 %.2f，去水大约 主%.0f%% 平%.0f%% 客%.0f%%。\n",
+		fmt.Fprintf(&b, "Bet365 欧赔 主 %.2f 平 %.2f 客 %.2f，去水大约 主%.0f%% 平%.0f%% 客%.0f%%。",
 			q.EU.H, q.EU.D, q.EU.A, q.EU.PH, q.EU.PD, q.EU.PA)
+		if q.EU.H0 > 1 {
+			fmt.Fprintf(&b, "初赔 主 %.2f 平 %.2f 客 %.2f。", q.EU.H0, q.EU.D0, q.EU.A0)
+		}
+		b.WriteByte('\n')
+	}
+	if len(q.Books) > 0 {
+		b.WriteString("多家欧赔初→即：")
+		for i, bk := range q.Books {
+			if i > 0 {
+				b.WriteString("；")
+			}
+			op, cur := bk.Opening, bk.Current
+			if op != nil && cur != nil && op.H > 1 && cur.H > 1 {
+				fmt.Fprintf(&b, "%s %.2f/%.2f/%.2f → %.2f/%.2f/%.2f", bk.Company, op.H, op.D, op.A, cur.H, cur.D, cur.A)
+			} else if cur != nil && cur.H > 1 {
+				fmt.Fprintf(&b, "%s 即 %.2f/%.2f/%.2f", bk.Company, cur.H, cur.D, cur.A)
+			} else {
+				b.WriteString(bk.Company)
+			}
+		}
+		b.WriteString("。价值仍以 Bet365 即时欧赔为准。\n")
 	}
 	if q.OU != nil {
 		fmt.Fprintf(&b, "Bet365 大小 %.1f 大 %.2f 小 %.2f。\n", q.OU.Line, q.OU.Over, q.OU.Under)
 	}
 	if q.Asian != nil {
 		fmt.Fprintf(&b, "Bet365 亚盘 %s 主 %.2f 客 %.2f。\n", q.Asian.Line, q.Asian.Home, q.Asian.Away)
+	}
+	if q.AsianMove != nil && q.AsianMove.OpeningLine != "" {
+		fmt.Fprintf(&b, "澳门亚盘对照 初 %s %.2f/%.2f → 即 %s %.2f/%.2f，仅作机构变化参考，价值不看这组。\n",
+			q.AsianMove.OpeningLine, q.AsianMove.OpeningLeft, q.AsianMove.OpeningRight,
+			q.AsianMove.CurrentLine, q.AsianMove.CurrentLeft, q.AsianMove.CurrentRight)
+	}
+	if q.OUMove != nil && q.OUMove.OpeningLine != "" {
+		fmt.Fprintf(&b, "澳门大小对照 初 %s %.2f/%.2f → 即 %s %.2f/%.2f，仅作机构变化参考。\n",
+			q.OUMove.OpeningLine, q.OUMove.OpeningLeft, q.OUMove.OpeningRight,
+			q.OUMove.CurrentLine, q.OUMove.CurrentLeft, q.OUMove.CurrentRight)
+	}
+	if len(q.AsianBooks) > 0 {
+		b.WriteString("多家亚盘初→即：")
+		for i, r := range q.AsianBooks {
+			if i > 0 {
+				b.WriteString("；")
+			}
+			fmt.Fprintf(&b, "%s %s %.2f/%.2f → %s %.2f/%.2f", r.Company, r.OpeningLine, r.OpeningLeft, r.OpeningRight, r.CurrentLine, r.CurrentLeft, r.CurrentRight)
+		}
+		b.WriteString("。亚赔价值仍看 Bet365。\n")
+	}
+	if len(q.OUBooks) > 0 {
+		b.WriteString("多家大小初→即：")
+		for i, r := range q.OUBooks {
+			if i > 0 {
+				b.WriteString("；")
+			}
+			fmt.Fprintf(&b, "%s %s %.2f/%.2f → %s %.2f/%.2f", r.Company, r.OpeningLine, r.OpeningLeft, r.OpeningRight, r.CurrentLine, r.CurrentLeft, r.CurrentRight)
+		}
+		b.WriteString("。\n")
 	}
 	if b.Len() == 0 {
 		return "Bet365 盘还没齐。\n"

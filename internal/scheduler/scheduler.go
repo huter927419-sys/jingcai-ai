@@ -1,7 +1,9 @@
 package scheduler
 
 import (
+	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -9,6 +11,7 @@ import (
 	"jingcai-ai/internal/market"
 	"jingcai-ai/internal/sporttery"
 	"jingcai-ai/internal/store"
+	"jingcai-ai/internal/titan007"
 
 	"github.com/robfig/cron/v3"
 )
@@ -17,20 +20,23 @@ type Scheduler struct {
 	Store    *store.Store
 	Client   *sporttery.Client
 	Market   *market.Client
+	Titan    *titan007.Client
 	Engine   *analyze.Engine
 	Location *time.Location
 
 	mu     sync.Mutex
 	closes map[int64]chan struct{}
 	cron   *cron.Cron
+	sfcMu  sync.Mutex
 }
 
-func New(st *store.Store, cl *sporttery.Client, mk *market.Client, eng *analyze.Engine, loc *time.Location) *Scheduler {
+func New(st *store.Store, cl *sporttery.Client, mk *market.Client, titan *titan007.Client, eng *analyze.Engine, loc *time.Location) *Scheduler {
 	c := cron.New(cron.WithLocation(loc), cron.WithSeconds())
 	return &Scheduler{
 		Store:    st,
 		Client:   cl,
 		Market:   mk,
+		Titan:    titan,
 		Engine:   eng,
 		Location: loc,
 		closes:   map[int64]chan struct{}{},
@@ -57,7 +63,7 @@ func (s *Scheduler) Start() error {
 		if err := s.BackfillNew(); err != nil {
 			log.Printf("backfill: %v", err)
 		}
-		if err := s.RefreshSFC(); err != nil {
+		if err := s.RefreshSFCAndExperts(); err != nil {
 			log.Printf("sfc: %v", err)
 		}
 	}); err != nil {
@@ -80,7 +86,7 @@ func (s *Scheduler) Start() error {
 		if err := s.BackfillExperts(); err != nil {
 			log.Printf("experts: %v", err)
 		}
-		if err := s.RefreshSFC(); err != nil {
+		if err := s.RefreshSFCAndExperts(); err != nil {
 			log.Printf("sfc: %v", err)
 		}
 	}()
@@ -110,6 +116,14 @@ func (s *Scheduler) RefreshNow() error {
 }
 
 func (s *Scheduler) RefreshSFC() error {
+	return s.refreshSFC(false)
+}
+
+func (s *Scheduler) RefreshSFCAndExperts() error {
+	return s.refreshSFC(true)
+}
+
+func (s *Scheduler) refreshSFC(runExperts bool) error {
 	if s.Market == nil {
 		return nil
 	}
@@ -117,7 +131,7 @@ func (s *Scheduler) RefreshSFC() error {
 	if err != nil {
 		return err
 	}
-	s.fillSFCAnalysis(board)
+	ids := s.fillSFCAnalysis(board)
 	if err := s.Store.SaveSFC(board); err != nil {
 		return err
 	}
@@ -127,13 +141,33 @@ func (s *Scheduler) RefreshSFC() error {
 			n++
 		}
 	}
-	log.Printf("sfc issue %s matches %d analyzed %d", board.Issue, len(board.Matches), n)
+	log.Printf("sfc issue %s matches %d analyzed %d experts %d", board.Issue, len(board.Matches), n, len(ids))
+	if runExperts && len(ids) > 0 && s.Engine != nil {
+		go s.completeSFC(ids)
+	}
 	return nil
 }
 
-func (s *Scheduler) fillSFCAnalysis(board *market.SFCBoard) {
-	if board == nil {
+func (s *Scheduler) completeSFC(ids []int64) {
+	if !s.sfcMu.TryLock() {
 		return
+	}
+	defer s.sfcMu.Unlock()
+	seen := map[int64]bool{}
+	for _, id := range ids {
+		if id == 0 || seen[id] {
+			continue
+		}
+		seen[id] = true
+		if err := s.Engine.CompleteSFC(id); err != nil {
+			log.Printf("sfc experts %d: %v", id, err)
+		}
+	}
+}
+
+func (s *Scheduler) fillSFCAnalysis(board *market.SFCBoard) []int64 {
+	if board == nil {
+		return nil
 	}
 	prev, _ := s.Store.LatestSFC()
 	prevByNo := map[int]market.SFCMatch{}
@@ -146,6 +180,7 @@ func (s *Scheduler) fillSFCAnalysis(board *market.SFCBoard) {
 	if s.Location != nil {
 		now = now.In(s.Location)
 	}
+	var ids []int64
 	for i := range board.Matches {
 		row := &board.Matches[i]
 		if p, ok := prevByNo[row.No]; ok {
@@ -157,10 +192,8 @@ func (s *Scheduler) fillSFCAnalysis(board *market.SFCBoard) {
 				row.Quote = p.Quote
 			}
 		}
-		if m := s.Store.MatchSFC(*row, now); m != nil {
-			if sn, err := s.Store.PreferredSnapshot(m.ID); err == nil && sn != nil && sn.Result.HomeWin+sn.Result.Draw+sn.Result.AwayWin > 1 {
-				continue
-			}
+		if m := s.Store.MatchSFC(*row, now); m != nil && m.Origin != "sfc" {
+			continue
 		}
 		needMarkets := row.Fid > 0 && (row.Quote == nil || (row.Quote.Asian == nil && row.Quote.EU == nil))
 		if needMarkets {
@@ -178,7 +211,79 @@ func (s *Scheduler) fillSFCAnalysis(board *market.SFCBoard) {
 			res := analyze.ProbsFrom1X2(h, d, a)
 			row.AnalyzedHome, row.AnalyzedDraw, row.AnalyzedAway = res.HomeWin, res.Draw, res.AwayWin
 		}
+		if s.Engine == nil {
+			continue
+		}
+		m := sfcMatch(board.Issue, *row, s.Location)
+		if err := s.Store.UpsertSFCMatch(m); err != nil {
+			log.Printf("sfc upsert %d: %v", row.No, err)
+			continue
+		}
+		if row.Quote != nil {
+			q := *row.Quote
+			q.MatchID = m.ID
+			if err := s.Store.SaveQuote(&q); err != nil {
+				log.Printf("sfc quote %d: %v", row.No, err)
+			}
+		}
+		if prev, _ := s.Store.GetPreview(m.ID); prev == nil && row.Fid > 0 && s.Market != nil {
+			if p, err := s.Market.FetchPreview(m.ID, row.Fid); err == nil && p != nil {
+				_ = s.Store.SavePreview(p)
+			} else if err != nil {
+				log.Printf("sfc preview %d: %v", row.No, err)
+			}
+			time.Sleep(250 * time.Millisecond)
+		}
+		if err := s.Engine.SeedFromMarket(m); err != nil {
+			log.Printf("sfc seed %d: %v", row.No, err)
+			continue
+		}
+		ids = append(ids, m.ID)
+		if sn, err := s.Store.PreferredSnapshot(m.ID); err == nil && sn != nil && sn.Result.HomeWin+sn.Result.Draw+sn.Result.AwayWin > 1 {
+			row.AnalyzedHome, row.AnalyzedDraw, row.AnalyzedAway = sn.Result.HomeWin, sn.Result.Draw, sn.Result.AwayWin
+		}
 	}
+	return ids
+}
+
+func sfcMatch(issue string, row market.SFCMatch, loc *time.Location) sporttery.Match {
+	kick := parseSFCKick(row.Kickoff, loc)
+	abb := strings.TrimSpace(row.League)
+	rs := []rune(abb)
+	if len(rs) > 2 {
+		abb = string(rs[:2])
+	}
+	m := sporttery.Match{
+		ID:           store.SFCMatchID(issue, row.No),
+		NumStr:       fmt.Sprintf("胜负%02d", row.No),
+		League:       row.League,
+		LeagueAbb:    abb,
+		Home:         row.Home,
+		Away:         row.Away,
+		Kickoff:      kick,
+		BusinessDate: kick.Format("2006-01-02"),
+	}
+	if row.EUHome > 1 && row.EUDraw > 1 && row.EUAway > 1 {
+		m.HasHAD = true
+		m.HAD = sporttery.Odds{H: row.EUHome, D: row.EUDraw, A: row.EUAway}
+	}
+	return m
+}
+
+func parseSFCKick(s string, loc *time.Location) time.Time {
+	if loc == nil {
+		loc = time.Local
+	}
+	now := time.Now().In(loc)
+	t, err := time.ParseInLocation("01-02 15:04", strings.TrimSpace(s), loc)
+	if err != nil {
+		return now.Add(24 * time.Hour)
+	}
+	t = time.Date(now.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), 0, 0, loc)
+	if t.Before(now.Add(-36 * time.Hour)) {
+		t = t.AddDate(1, 0, 0)
+	}
+	return t
 }
 
 func (s *Scheduler) ingest(kind store.SnapshotKind, onlyMissing bool) error {
@@ -463,4 +568,83 @@ func (s *Scheduler) refreshQuotes(matches []sporttery.Match) {
 		}(m, fid)
 	}
 	wg.Wait()
+	s.refreshTitan(matches)
+}
+
+func (s *Scheduler) refreshTitan(matches []sporttery.Match) {
+	if s.Titan == nil || len(matches) == 0 {
+		return
+	}
+	now := time.Now()
+	if s.Location != nil {
+		now = now.In(s.Location)
+	}
+	rows, err := s.Titan.FetchJingzu(now)
+	if err != nil {
+		log.Printf("titan schedule: %v", err)
+		return
+	}
+	sem := make(chan struct{}, 3)
+	var wg sync.WaitGroup
+	n := 0
+	for _, m := range matches {
+		hit := titan007.FindMatch(rows, m.NumStr, m.Home, m.Away)
+		if hit == nil {
+			continue
+		}
+		wg.Add(1)
+		n++
+		go func(m sporttery.Match, id int64) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			odds, err := s.Titan.FetchOdds(id)
+			if err != nil {
+				log.Printf("titan odds %s: %v", m.NumStr, err)
+				return
+			}
+			q, _ := s.Store.GetQuote(m.ID)
+			if q == nil {
+				q = &market.Quote{MatchID: m.ID, FetchedAt: time.Now(), Company: "Bet365"}
+			}
+			titan007.Apply(q, odds)
+			q.MatchID = m.ID
+			q.FetchedAt = time.Now()
+			if err := s.Store.SaveQuote(q); err != nil {
+				log.Printf("titan save %s: %v", m.NumStr, err)
+			}
+		}(m, hit.ID)
+	}
+	wg.Wait()
+	if n > 0 {
+		log.Printf("titan odds %d/%d", n, len(matches))
+	}
+	s.refreshMarketTakes(matches)
+}
+
+func (s *Scheduler) refreshMarketTakes(matches []sporttery.Match) {
+	if s.Engine == nil || len(matches) == 0 {
+		return
+	}
+	now := time.Now()
+	n := 0
+	for _, m := range matches {
+		if n >= 8 {
+			break
+		}
+		if !m.Kickoff.IsZero() && now.After(m.Kickoff.Add(20*time.Minute)) {
+			continue
+		}
+		ok, err := s.Engine.RefreshMarketTake(m.ID)
+		if err != nil {
+			log.Printf("market take %s: %v", m.NumStr, err)
+			continue
+		}
+		if ok {
+			n++
+		}
+	}
+	if n > 0 {
+		log.Printf("market takes %d", n)
+	}
 }

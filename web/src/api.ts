@@ -12,6 +12,7 @@ export type MatchRow = {
   homeGoals?: number | null;
   awayGoals?: number | null;
   finished?: boolean;
+  origin?: string;
   status: string;
   kind: string;
   odds?: OddsBoard;
@@ -51,10 +52,33 @@ export type OddsBoard = {
 
 export type MarketQuote = {
   company?: string;
-  eu?: { h: number; d: number; a: number; pH: number; pD: number; pA: number; company?: string };
+  eu?: { h: number; d: number; a: number; h0?: number; d0?: number; a0?: number; pH: number; pD: number; pA: number; company?: string };
   asian?: { line: string; lineNum: number; home: number; away: number; pH: number; pA: number; company?: string };
   ou?: { line: number; over: number; under: number; pO: number; pU: number; company?: string };
   betfair?: { homeVol: number; drawVol: number; awayVol: number; total: number; thin: boolean; note?: string };
+  titanId?: number;
+  books?: Array<{
+    companyId: number;
+    company: string;
+    opening?: { h: number; d: number; a: number };
+    current?: { h: number; d: number; a: number };
+  }>;
+  asianMove?: LineMove;
+  ouMove?: LineMove;
+  asianBooks?: LineMove[];
+  ouBooks?: LineMove[];
+};
+
+export type LineMove = {
+  companyId?: number;
+  company?: string;
+  openingLine?: string;
+  currentLine?: string;
+  openingLeft?: number;
+  openingRight?: number;
+  currentLeft?: number;
+  currentRight?: number;
+  nodeCount?: number;
 };
 
 export type PlayRow = {
@@ -119,6 +143,44 @@ export function playRows(odds?: OddsBoard | null): PlayRow[] {
     ou.empty = "未开售";
   }
   return [std, hc, ou];
+}
+
+export function playMarketRows(q?: MarketQuote | null): PlayRow[] {
+  const eu: PlayRow = { key: "std", label: "欧赔" };
+  if (q?.eu && q.eu.h > 1) {
+    eu.h = q.eu.h;
+    eu.d = q.eu.d;
+    eu.a = q.eu.a;
+    eu.pH = q.eu.pH;
+    eu.pD = q.eu.pD;
+    eu.pA = q.eu.pA;
+    eu.note = "市场";
+  } else {
+    eu.empty = "采集中";
+  }
+  const line = q?.asian?.line ? String(q.asian.line) : "";
+  const hc: PlayRow = { key: "hc", label: line ? `亚盘 ${line}` : "亚盘", twoWay: true, ends: ["主", "客"] };
+  if (q?.asian && q.asian.home > 0) {
+    hc.h = q.asian.home;
+    hc.a = q.asian.away;
+    hc.pH = q.asian.pH;
+    hc.pA = q.asian.pA;
+    hc.note = "Bet365";
+  } else {
+    hc.empty = "采集中";
+  }
+  const ouLine = q?.ou?.line != null ? `大小 ${q.ou.line}` : "大小";
+  const ou: PlayRow = { key: "ou", label: ouLine, twoWay: true, ends: ["大", "小"] };
+  if (q?.ou && q.ou.over > 0) {
+    ou.h = q.ou.over;
+    ou.a = q.ou.under;
+    ou.pH = q.ou.pO;
+    ou.pA = q.ou.pU;
+    ou.note = "Bet365";
+  } else {
+    ou.empty = "采集中";
+  }
+  return [eu, hc, ou];
 }
 
 export type ScoreProb = { home: number; away: number; score: string; p: number };

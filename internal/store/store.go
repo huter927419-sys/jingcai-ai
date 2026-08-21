@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"jingcai-ai/internal/eval"
@@ -37,6 +39,7 @@ type MatchRow struct {
 	HomeGoals    *int      `json:"homeGoals,omitempty"`
 	AwayGoals    *int      `json:"awayGoals,omitempty"`
 	Finished     bool      `json:"finished"`
+	Origin       string    `json:"origin,omitempty"`
 }
 
 type Snapshot struct {
@@ -55,6 +58,7 @@ type Snapshot struct {
 	UsedModels []string
 	Takes      []ModelTake
 	ExpertDone bool
+	MarketSig  string
 }
 
 type ModelTake struct {
@@ -86,6 +90,7 @@ type persistedResult struct {
 	UsedModels []string     `json:"usedModels,omitempty"`
 	Takes      []ModelTake  `json:"takes,omitempty"`
 	ExpertDone bool         `json:"expertDone,omitempty"`
+	MarketSig  string       `json:"marketSig,omitempty"`
 }
 
 type PublicSnapshot struct {
@@ -215,6 +220,7 @@ CREATE TABLE IF NOT EXISTS sfc_issues (
 	}
 	_ = s.ensureColumn("matches", "home_goals", "INTEGER")
 	_ = s.ensureColumn("matches", "away_goals", "INTEGER")
+	_ = s.ensureColumn("matches", "origin", "TEXT NOT NULL DEFAULT ''")
 	return nil
 }
 
@@ -257,6 +263,32 @@ ON CONFLICT(id) DO UPDATE SET
 	return err
 }
 
+func (s *Store) UpsertSFCMatch(m sporttery.Match) error {
+	_, err := s.DB.Exec(`
+INSERT INTO matches (id, num_str, league, league_abb, home, away, kickoff, business_date, updated_at, origin)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'sfc')
+ON CONFLICT(id) DO UPDATE SET
+  num_str=excluded.num_str,
+  league=excluded.league,
+  league_abb=excluded.league_abb,
+  home=excluded.home,
+  away=excluded.away,
+  kickoff=excluded.kickoff,
+  business_date=excluded.business_date,
+  updated_at=excluded.updated_at,
+  origin='sfc'
+`, m.ID, m.NumStr, m.League, m.LeagueAbb, m.Home, m.Away, m.Kickoff.Format(time.RFC3339), m.BusinessDate, time.Now().Format(time.RFC3339))
+	return err
+}
+
+func SFCMatchID(issue string, no int) int64 {
+	n, _ := strconv.ParseInt(strings.TrimSpace(issue), 10, 64)
+	if n <= 0 {
+		n = 0
+	}
+	return 8_000_000_000 + n*100 + int64(no)
+}
+
 func (s *Store) HasSnapshot(id int64, kind SnapshotKind) (bool, error) {
 	var n int
 	err := s.DB.QueryRow(`SELECT COUNT(1) FROM snapshots WHERE match_id=? AND kind=?`, id, kind).Scan(&n)
@@ -264,7 +296,7 @@ func (s *Store) HasSnapshot(id int64, kind SnapshotKind) (bool, error) {
 }
 
 func (s *Store) SaveSnapshot(sn Snapshot) error {
-	raw, err := json.Marshal(persistedResult{Result: sn.Result, Eval: sn.Eval, Handicap: sn.Handicap, UsedModels: sn.UsedModels, Takes: sn.Takes, ExpertDone: sn.ExpertDone})
+	raw, err := json.Marshal(persistedResult{Result: sn.Result, Eval: sn.Eval, Handicap: sn.Handicap, UsedModels: sn.UsedModels, Takes: sn.Takes, ExpertDone: sn.ExpertDone, MarketSig: sn.MarketSig})
 	if err != nil {
 		return err
 	}
@@ -327,7 +359,7 @@ func (s *Store) GetMatch(id int64) (*MatchRow, error) {
 
 func (s *Store) ListUpcoming(from time.Time) ([]MatchRow, error) {
 	rows, err := s.DB.Query(matchSelect+`
-WHERE m.kickoff >= ?
+WHERE m.kickoff >= ?`+jingcaiOnly+`
 ORDER BY m.business_date ASC, CAST(substr(m.num_str, -3) AS INTEGER) ASC, m.kickoff ASC
 `, from.Format(time.RFC3339))
 	if err != nil {
@@ -338,7 +370,7 @@ ORDER BY m.business_date ASC, CAST(substr(m.num_str, -3) AS INTEGER) ASC, m.kick
 
 func (s *Store) ListBetween(from, to time.Time) ([]MatchRow, error) {
 	rows, err := s.DB.Query(matchSelect+`
-WHERE m.kickoff >= ? AND m.kickoff < ?
+WHERE m.kickoff >= ? AND m.kickoff < ?`+jingcaiOnly+`
 ORDER BY m.business_date ASC, CAST(substr(m.num_str, -3) AS INTEGER) ASC, m.kickoff ASC
 `, from.Format(time.RFC3339), to.Format(time.RFC3339))
 	if err != nil {
@@ -351,9 +383,11 @@ const matchSelect = `
 SELECT m.id, m.num_str, m.league, m.league_abb, m.home, m.away, m.kickoff, m.business_date,
   EXISTS(SELECT 1 FROM snapshots s WHERE s.match_id=m.id AND s.kind='open'),
   EXISTS(SELECT 1 FROM snapshots s WHERE s.match_id=m.id AND s.kind='close'),
-  m.home_goals, m.away_goals
+  m.home_goals, m.away_goals, COALESCE(m.origin,'')
 FROM matches m
 `
+
+const jingcaiOnly = ` AND COALESCE(m.origin,'') != 'sfc'`
 
 func (s *Store) PruneOlderThan(t time.Time) error {
 	_, err := s.DB.Exec(`DELETE FROM match_previews WHERE match_id IN (SELECT id FROM matches WHERE kickoff < ? AND home_goals IS NULL)`, t.Format(time.RFC3339))
@@ -381,7 +415,8 @@ func scanMatch(row rowScanner) (*MatchRow, error) {
 	var kick string
 	var open, close int
 	var hg, ag sql.NullInt64
-	if err := row.Scan(&m.ID, &m.NumStr, &m.League, &m.LeagueAbb, &m.Home, &m.Away, &kick, &m.BusinessDate, &open, &close, &hg, &ag); err != nil {
+	var origin string
+	if err := row.Scan(&m.ID, &m.NumStr, &m.League, &m.LeagueAbb, &m.Home, &m.Away, &kick, &m.BusinessDate, &open, &close, &hg, &ag, &origin); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, err
 		}
@@ -394,6 +429,7 @@ func scanMatch(row rowScanner) (*MatchRow, error) {
 	m.Kickoff = t
 	m.HasOpen = open == 1
 	m.HasClose = close == 1
+	m.Origin = origin
 	if hg.Valid && ag.Valid {
 		h, a := int(hg.Int64), int(ag.Int64)
 		m.HomeGoals = &h
@@ -442,6 +478,7 @@ func scanSnapshot(row rowScanner) (*Snapshot, error) {
 	sn.UsedModels = pr.UsedModels
 	sn.Takes = pr.Takes
 	sn.ExpertDone = pr.ExpertDone || len(pr.Takes) > 0
+	sn.MarketSig = pr.MarketSig
 	return &sn, nil
 }
 
@@ -594,7 +631,7 @@ func (s *Store) ListSettled(limit int) ([]MatchRow, error) {
 		limit = 40
 	}
 	rows, err := s.DB.Query(matchSelect+`
-WHERE m.home_goals IS NOT NULL AND m.away_goals IS NOT NULL
+WHERE m.home_goals IS NOT NULL AND m.away_goals IS NOT NULL`+jingcaiOnly+`
 ORDER BY m.kickoff DESC
 LIMIT ?`, limit)
 	if err != nil {
@@ -605,7 +642,7 @@ LIMIT ?`, limit)
 
 func (s *Store) ListFinishedSince(from time.Time) ([]MatchRow, error) {
 	rows, err := s.DB.Query(matchSelect+`
-WHERE m.home_goals IS NOT NULL AND m.away_goals IS NOT NULL AND m.kickoff >= ?
+WHERE m.home_goals IS NOT NULL AND m.away_goals IS NOT NULL AND m.kickoff >= ?`+jingcaiOnly+`
 ORDER BY m.kickoff DESC
 `, from.Format(time.RFC3339))
 	if err != nil {

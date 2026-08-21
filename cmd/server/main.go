@@ -15,6 +15,7 @@ import (
 	"jingcai-ai/internal/scheduler"
 	"jingcai-ai/internal/sporttery"
 	"jingcai-ai/internal/store"
+	"jingcai-ai/internal/titan007"
 )
 
 func main() {
@@ -44,7 +45,9 @@ func main() {
 	}
 	if cfg.ShqbbKey != "" {
 		models = append(models, grok.NewNamed("ChatGPT", cfg.ShqbbKey, cfg.ShqbbBase, cfg.GPTModel))
-		models = append(models, grok.NewNamed("Claude", cfg.ShqbbKey, cfg.ShqbbBase, cfg.ClaudeModel))
+	}
+	if cfg.ClaudeKey != "" {
+		models = append(models, grok.NewNamed("Claude", cfg.ClaudeKey, cfg.ShqbbBase, cfg.ClaudeModel))
 	}
 	for _, model := range models {
 		model.Audit = audit
@@ -66,7 +69,7 @@ func main() {
 	if cfg.FetchProxy != "" {
 		log.Printf("抓盘走代理 %s", cfg.FetchProxy)
 	}
-	sched := scheduler.New(st, sporttery.New(cfg.FetchProxy), market.New(cfg.FetchProxy), eng, cfg.Location)
+	sched := scheduler.New(st, sporttery.New(cfg.FetchProxy), market.New(cfg.FetchProxy), titan007.New(cfg.FetchProxy), eng, cfg.Location)
 	if err := sched.Start(); err != nil {
 		log.Fatal(err)
 	}
