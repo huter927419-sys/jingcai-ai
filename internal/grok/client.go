@@ -7,8 +7,13 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
+
+	"jingcai-ai/internal/ailog"
 )
+
+var requestSequence atomic.Uint64
 
 type Client struct {
 	Name    string
@@ -16,17 +21,21 @@ type Client struct {
 	BaseURL string
 	Model   string
 	HTTP    *http.Client
+	Audit   *ailog.Logger
 }
 
 type Output struct {
-	LambdaHome float64 `json:"lambda_home"`
-	LambdaAway float64 `json:"lambda_away"`
-	Headline   string  `json:"headline"`
-	PlainTalk  string  `json:"plain_talk"`
-	Pick1X2    string  `json:"pick_1x2"`
-	PickOU     string  `json:"pick_ou"`
-	Verdict    string  `json:"verdict"`
-	BuyTalk    string  `json:"buy_talk"`
+	LambdaHome   float64  `json:"lambda_home"`
+	LambdaAway   float64  `json:"lambda_away"`
+	Headline     string   `json:"headline"`
+	PlainTalk    string   `json:"plain_talk"`
+	Pick1X2      string   `json:"pick_1x2"`
+	PickOU       string   `json:"pick_ou"`
+	Verdict      string   `json:"verdict"`
+	BuyTalk      string   `json:"buy_talk"`
+	Pattern      string   `json:"pattern"`
+	Scores       []string `json:"scores"`
+	PickHandicap string   `json:"pick_handicap"`
 }
 
 func New(key, base, model string) *Client {
@@ -52,10 +61,39 @@ func (c *Client) Enabled() bool {
 	return c != nil && c.Key != ""
 }
 
-func (c *Client) Analyze(prompt string) (Output, error) {
+func (c *Client) Analyze(prompt string) (out Output, err error) {
 	if !c.Enabled() {
 		return Output{}, fmt.Errorf("no api key")
 	}
+	started := time.Now()
+	requestID := fmt.Sprintf("%d-%06d", started.UnixMilli(), requestSequence.Add(1))
+	endpoint := c.BaseURL + "/chat/completions"
+	stage := "build_request"
+	status := 0
+	requestBody := ""
+	responseBody := ""
+	defer func() {
+		if c.Audit == nil {
+			return
+		}
+		event := ailog.Event{
+			Timestamp:  started,
+			RequestID:  requestID,
+			Provider:   c.Name,
+			Model:      c.Model,
+			Endpoint:   endpoint,
+			DurationMS: time.Since(started).Milliseconds(),
+			HTTPStatus: status,
+			Success:    err == nil,
+			Stage:      stage,
+			Request:    requestBody,
+			Response:   responseBody,
+		}
+		if err != nil {
+			event.Error = err.Error()
+		}
+		c.Audit.Log(event)
+	}()
 	body := map[string]any{
 		"model":      c.Model,
 		"max_tokens": 800,
@@ -71,22 +109,32 @@ func (c *Client) Analyze(prompt string) (Output, error) {
 		body["response_format"] = map[string]string{"type": "json_object"}
 	}
 	raw, _ := json.Marshal(body)
-	req, err := http.NewRequest(http.MethodPost, c.BaseURL+"/chat/completions", bytes.NewReader(raw))
+	requestBody = string(raw)
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(raw))
 	if err != nil {
 		return Output{}, err
 	}
 	req.Header.Set("Authorization", "Bearer "+c.Key)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+	stage = "http_request"
 	res, err := c.HTTP.Do(req)
 	if err != nil {
 		return Output{}, err
 	}
 	defer res.Body.Close()
-	respBody, _ := io.ReadAll(res.Body)
+	status = res.StatusCode
+	stage = "response_read"
+	respBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		return Output{}, err
+	}
+	responseBody = string(respBody)
 	if res.StatusCode >= 300 {
+		stage = "http_status"
 		return Output{}, fmt.Errorf("%s HTTP %d: %s", c.tag(), res.StatusCode, truncate(string(respBody), 400))
 	}
+	stage = "response_envelope"
 	var parsed struct {
 		Choices []struct {
 			Message struct {
@@ -100,6 +148,7 @@ func (c *Client) Analyze(prompt string) (Output, error) {
 	if len(parsed.Choices) == 0 {
 		return Output{}, fmt.Errorf("%s empty choices", c.tag())
 	}
+	stage = "response_content"
 	content := strings.TrimSpace(parsed.Choices[0].Message.Content)
 	content = stripThink(content)
 	content = strings.TrimPrefix(content, "```json")
@@ -111,13 +160,15 @@ func (c *Client) Analyze(prompt string) (Output, error) {
 			content = content[i : j+1]
 		}
 	}
-	var out Output
+	stage = "response_json"
 	if err := json.Unmarshal([]byte(content), &out); err != nil {
 		return Output{}, fmt.Errorf("%s json: %w (%s)", c.tag(), err, truncate(content, 240))
 	}
+	stage = "response_validation"
 	if out.LambdaHome < 0.15 || out.LambdaAway < 0.15 {
 		return Output{}, fmt.Errorf("%s lambda invalid", c.tag())
 	}
+	stage = "complete"
 	return out, nil
 }
 
@@ -128,19 +179,25 @@ func (c *Client) systemText() string {
 	return systemPrompt
 }
 
-const claudePrompt = `你是足球赛前专家。只输出 JSON：
-{"lambda_home":数字,"lambda_away":数字,"headline":"不超过22字","plain_talk":"120-180字完整解读，覆盖走势、阵容、值不值","pick_1x2":"胜或平或负","pick_ou":"大或小","verdict":"主推或可看或放弃","buy_talk":"40-80字，说明竞彩买哪一玩法哪一侧，或明确放弃。不要写金额"}
+const claudePrompt = `你是专业足球盘口分析师和赛事解说员。只输出 JSON：
+{"lambda_home":数字,"lambda_away":数字,"headline":"不超过22字","pattern":"20-40字比赛格局","plain_talk":"220-320字专业解盘","pick_1x2":"胜或平或负","pick_ou":"大或小","pick_handicap":"让胜或让平或让负或放弃","scores":["情景比分1","情景比分2"],"verdict":"主推或可看或放弃","buy_talk":"70-120字参考买入，明确主方向、次方向、触发条件和风险边界"}
 lambda 是90分钟期望进球，范围0.3-4.2，贴近初值，微调不超过0.35。
-不要写术语，不要把某一个比分说成一定会出。`
+plain_talk 依次说明：盘口与水位表达的态度、阵型和首发对攻防的影响、伤停是否有可靠数据、价值方向如何变化。允许使用升盘、降盘、退盘、阻上、低水、高水、赔付压力、攻守转换、肋部、边路纵深等专业术语，但必须解释清楚。没有伤停资料就明确写未确认，严禁虚构。不要把比分说成一定会出。`
 
-const systemPrompt = `你是竞彩足球专家，按指定角色做完整解读。内部用价值差、松紧、过热思考，对外只说人话。
+const systemPrompt = `你是专业足球盘口分析师和赛事解说员，按指定研判视角给出可执行结论。解读要像专业赛前节目：先定比赛格局，再解释盘口、人员和价值。
 只输出 JSON：
-{"lambda_home":数字,"lambda_away":数字,"headline":"不超过22字","plain_talk":"160-240字完整解读：这场怎么打、盘口热不热、值不值","pick_1x2":"胜|平|负","pick_ou":"大|小","verdict":"主推|可看|放弃","buy_talk":"40-90字，明确竞彩怎么买：胜平负/让球/大小2.5买哪一侧，或放弃。不要写金额"}
+{"lambda_home":数字,"lambda_away":数字,"headline":"不超过22字","pattern":"20-40字比赛格局","plain_talk":"220-340字专业解盘","pick_1x2":"胜|平|负","pick_ou":"大|小","pick_handicap":"让胜|让平|让负|放弃","scores":["情景比分1","情景比分2"],"verdict":"主推|可看|放弃","buy_talk":"70-120字参考买入，明确主方向、次方向、触发条件和风险边界"}
 硬性规定：
 - lambda 是 90 分钟期望进球，范围 0.3-4.2，必须贴近给定初值，微调不超过 0.35。
-- headline、plain_talk、buy_talk 禁止出现：凯利、价值差、热门度、泊松、xG、λ、模型、庄家、去水。
+- plain_talk 必须按自然段语义覆盖：①初盘到当前盘的升降、欧亚赔和大小球态度；②阵型、首发、替补深度与攻守转换；③可靠伤停影响，无数据必须写“伤停信息未确认”，严禁虚构；④当前价格相对比赛概率的价值变化。
+- 允许使用升盘、降盘、退盘、阻上、低水、高水、赔付压力、肋部、边路纵深、高位压迫、攻守转换等专业术语，但要说清它对比赛的含义。
+- headline、plain_talk、buy_talk 禁止出现：AI、模型名、凯利、价值差、泊松、xG、λ、去水。
 - 价值看 Bet365，不要用竞彩 SP 判断值不值。票面只告诉用户买哪个玩法。
-- pick_1x2 只选一侧。主推必须更值，拿不准写可看或放弃。
+- pick_1x2 只选一侧；scores 给两个合理的情景比分，只用于表达比赛路径，严禁暗示精确命中；buy_talk 必须依次写“格局、主方向、次方向、比分、防范”，不能含糊。
+- 主推必须同时有盘口、人员或价值依据，拿不准写可看或放弃。
+- plain_talk 禁止使用“看起来、感觉、别追太死、可以看看”等泛化口语。每一个方向都必须落到盘位、水位、阵型对位、人员结构或定价信号上。
+- buy_talk 必须以“参考买入：”开头，使用“主方向、次方向、防范、失效条件”等专业表达，不得使用“梭哈、稳胆、必赢、包中”。
+- buy_talk 必须明确这是条件性参考，指出至少一个会导致观点失效的临场风险；不要承诺结果或收益。
 - 不要把某一个比分说成一定会出。不要写投注金额。`
 
 func (c *Client) tag() string {

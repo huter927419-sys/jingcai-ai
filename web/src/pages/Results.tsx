@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { fetchExperts, fmtKick, type ExpertBoardRow, type ModelTake, type SettledItem } from "../api";
 import Layout from "../Layout";
 import { GroupBars } from "../Charts";
+import { IconChart, IconPulse, IconShield } from "../Icons";
 
 export default function Results() {
   const [board, setBoard] = useState<ExpertBoardRow[]>([]);
@@ -36,15 +37,34 @@ export default function Results() {
 
   const ranked = board.filter((r) => r.games > 0);
   const leader = ranked[0];
+  const verified = settled.length;
 
   return (
     <Layout>
-      <div className="page-head">
+      <div className="page-head results-head">
         <div>
-          <h1>结果</h1>
-          <div className="sub">本周完场用赛前资料让四位专家各自预测，再对照比分看谁更准。</div>
+          <div className="eyebrow"><span /> PERFORMANCE AUDIT</div>
+          <h1>赛后复盘中心</h1>
+          <div className="sub">所有赛前判断自动留档，以真实赛果持续检验研判表现</div>
         </div>
       </div>
+      <section className="proof-strip" aria-label="分析验证概览">
+        <div className="proof-lead">
+          <IconShield size={21} />
+          <span><b>结论可追溯，表现可验证</b><small>拒绝只展示正确案例，每场预测统一纳入对账</small></span>
+        </div>
+        <div className="proof-stat">
+          <IconChart size={17} />
+          <span>已对账场次<strong>{verified}</strong></span>
+        </div>
+        <div className="proof-stat">
+          <IconPulse size={17} />
+          <span>领先胜平负<strong>{leader?.games ? `${leader.rate1x2.toFixed(0)}%` : "—"}</strong></span>
+        </div>
+        <div className="proof-stat">
+          <span>领先大小球<strong>{leader?.games ? `${leader.rateOu.toFixed(0)}%` : "—"}</strong></span>
+        </div>
+      </section>
       {err ? <div className="err">{err}</div> : null}
       {pending > 0 ? (
         <p className="layer-talk" style={{ marginBottom: 16 }}>
@@ -52,19 +72,19 @@ export default function Results() {
         </p>
       ) : null}
       {!settled.length && !ranked.length ? (
-        <div className="empty">还没有完场。踢完会自动出现在这里，并计入专家评比。</div>
+        <div className="empty">还没有完场。赛后将自动对账，并计入各研判维度的表现统计。</div>
       ) : (
         <>
           {ranked.length ? (
             <>
               {leader ? (
                 <p className="layer-talk" style={{ marginBottom: 16 }}>
-                  目前最准的是{leader.role}（{leader.name}），胜平负 {leader.hit1x2}/{leader.games}，大小{" "}
+                  目前表现领先的是{leader.role}，胜平负 {leader.hit1x2}/{leader.games}，大小{" "}
                   {leader.hitOu}/{leader.games}。
                 </p>
               ) : null}
               <GroupBars
-                title="专家命中率"
+                title="研判维度命中率"
                 series={[
                   { name: "胜平负", color: "var(--win)" },
                   { name: "大小 2.5", color: "var(--draw)" },
@@ -77,7 +97,7 @@ export default function Results() {
                   <div className={`outcome${i === 0 && r.games ? " on" : ""}`} key={r.name}>
                     <div className="outcome-top">
                       <strong>{r.role}</strong>
-                      <span className="hud-chip">{r.name}</span>
+                      <span className="hud-chip">{r.games} 场样本</span>
                     </div>
                     <div className="play-prices two">
                       <div>
@@ -99,7 +119,7 @@ export default function Results() {
             </>
           ) : (
             <p className="layer-talk" style={{ marginBottom: 16 }}>
-              完场比分已记下。有专家会诊的场次才会进入命中率评比。
+              完场比分已记下。有完整赛前研判的场次才会进入命中率评比。
             </p>
           )}
           {yesterday.length ? (
@@ -149,7 +169,7 @@ function ResultCard({ it }: { it: SettledItem }) {
         {it.takes.length ? (
           it.takes.map((t) => <PickRow key={t.name} t={t} />)
         ) : (
-          <div className="pred muted">这场还没有专家会诊，只记比分。</div>
+          <div className="pred muted">这场还没有完整赛前研判，只记录比分。</div>
         )}
       </div>
     </Link>
@@ -161,8 +181,7 @@ function PickRow({ t }: { t: ModelTake }) {
   return (
     <div className={`result-pick${both ? " hit-all" : ""}`}>
       <span className="result-who">
-        {t.role || t.name}
-        <em>{t.name}</em>
+        {t.role || "专业研判"}
       </span>
       <span className={t.hit1x2 ? "hit" : "miss"}>胜平负 {t.pick1x2 || "—"}</span>
       <span className={t.hitOu ? "hit" : "miss"}>大小 {t.pickOu || "—"}</span>

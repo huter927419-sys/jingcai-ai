@@ -8,19 +8,22 @@ import (
 )
 
 type Config struct {
-	APIKey        string
-	BaseURL       string
-	Model         string
-	DeepSeekKey   string
-	DeepSeekBase  string
-	DeepSeekModel string
-	ShqbbKey      string
-	ShqbbBase     string
-	ClaudeModel   string
-	GPTModel      string
-	Listen        string
-	DataDir       string
-	Location      *time.Location
+	APIKey         string
+	BaseURL        string
+	Model          string
+	DeepSeekKey    string
+	DeepSeekBase   string
+	DeepSeekModel  string
+	ShqbbKey       string
+	ShqbbBase      string
+	ClaudeModel    string
+	GPTModel       string
+	Listen         string
+	DataDir        string
+	AILogDir       string
+	AILogRetention time.Duration
+	FetchProxy     string
+	Location       *time.Location
 }
 
 func Load() Config {
@@ -31,20 +34,35 @@ func Load() Config {
 		loc = time.FixedZone("CST", 8*3600)
 	}
 	return Config{
-		APIKey:        os.Getenv("APINEBULA_API_KEY"),
-		BaseURL:       getenv("APINEBULA_BASE_URL", "https://apinebula.ai/v1"),
-		Model:         getenv("GROK_MODEL", "grok-4.6"),
-		DeepSeekKey:   os.Getenv("DEEPSEEK_API_KEY"),
-		DeepSeekBase:  getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
-		DeepSeekModel: getenv("DEEPSEEK_MODEL", "deepseek-chat"),
-		ShqbbKey:      os.Getenv("SHQBB_API_KEY"),
-		ShqbbBase:     getenv("SHQBB_BASE_URL", "https://api.shqbb.com/v1"),
-		ClaudeModel:   getenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001"),
-		GPTModel:      getenv("GPT_MODEL", "gpt-5.4-mini"),
-		Listen:        getenv("LISTEN_ADDR", ":8080"),
-		DataDir:       getenv("DATA_DIR", "data"),
-		Location:      loc,
+		APIKey:         os.Getenv("APINEBULA_API_KEY"),
+		BaseURL:        getenv("APINEBULA_BASE_URL", "https://apinebula.ai/v1"),
+		Model:          getenv("GROK_MODEL", "grok-4.6"),
+		DeepSeekKey:    os.Getenv("DEEPSEEK_API_KEY"),
+		DeepSeekBase:   getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
+		DeepSeekModel:  getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+		ShqbbKey:       os.Getenv("SHQBB_API_KEY"),
+		ShqbbBase:      getenv("SHQBB_BASE_URL", "https://api.shqbb.com/v1"),
+		ClaudeModel:    getenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001"),
+		GPTModel:       getenv("GPT_MODEL", "gpt-5.4-mini"),
+		Listen:         getenv("LISTEN_ADDR", ":8080"),
+		DataDir:        getenv("DATA_DIR", "data"),
+		AILogDir:       getenv("AI_LOG_DIR", "logs/ai"),
+		AILogRetention: durationEnv("AI_LOG_RETENTION", 48*time.Hour),
+		FetchProxy:     os.Getenv("FETCH_PROXY"),
+		Location:       loc,
 	}
+}
+
+func durationEnv(k string, def time.Duration) time.Duration {
+	v := strings.TrimSpace(os.Getenv(k))
+	if v == "" {
+		return def
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d <= 0 {
+		return def
+	}
+	return d
 }
 
 func getenv(k, def string) string {

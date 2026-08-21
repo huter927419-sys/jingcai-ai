@@ -262,14 +262,6 @@ export function GroupBars({
   );
 }
 
-export const AI_COLORS: Record<string, string> = {
-  Grok: "#22d3ee",
-  DeepSeek: "#38bdf8",
-  ChatGPT: "#a78bfa",
-  Claude: "#fbbf24",
-  综合: "#e2e8f0",
-};
-
 export function ScoreHeat({
   tops,
   grid,
@@ -363,7 +355,7 @@ export function GateBoard({
             <div className={`outcome${s.picked ? " on" : ""}`} key={s.key}>
               <div className="outcome-top">
                 <strong>{s.label}</strong>
-                <span className={`verdict v-${s.verdict}`}>{s.verdict}</span>
+                <span className={`verdict v-${s.verdict}`}>{s.verdict === "放弃" ? "回避" : s.verdict}</span>
               </div>
               <div className={`outcome-diff ${s.value >= 0 ? "pos" : "neg"}`}>
                 {s.value > 0 ? "+" : ""}

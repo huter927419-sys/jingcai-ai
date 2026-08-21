@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"jingcai-ai/internal/ailog"
 	"jingcai-ai/internal/analyze"
 	"jingcai-ai/internal/config"
 	"jingcai-ai/internal/grok"
@@ -18,6 +19,11 @@ import (
 
 func main() {
 	cfg := config.Load()
+	audit, err := ailog.New(cfg.AILogDir, cfg.AILogRetention)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer audit.Close()
 	st, err := store.Open(cfg.DataDir)
 	if err != nil {
 		log.Fatal(err)
@@ -35,6 +41,9 @@ func main() {
 		models = append(models, grok.NewNamed("ChatGPT", cfg.ShqbbKey, cfg.ShqbbBase, cfg.GPTModel))
 		models = append(models, grok.NewNamed("Claude", cfg.ShqbbKey, cfg.ShqbbBase, cfg.ClaudeModel))
 	}
+	for _, model := range models {
+		model.Audit = audit
+	}
 	eng := &analyze.Engine{Store: st, Models: models}
 	names := make([]string, 0, len(models))
 	logs := make([]string, 0, len(models))
@@ -46,9 +55,13 @@ func main() {
 		log.Print("未配置模型密钥：仍会抓竞彩并写库，白话用本地模板")
 	} else {
 		log.Printf("模型已启用：%s", strings.Join(logs, ", "))
+		log.Printf("AI 审计日志：%s（保留 %s）", cfg.AILogDir, cfg.AILogRetention)
 	}
 
-	sched := scheduler.New(st, sporttery.New(), market.New(), eng, cfg.Location)
+	if cfg.FetchProxy != "" {
+		log.Printf("抓盘走代理 %s", cfg.FetchProxy)
+	}
+	sched := scheduler.New(st, sporttery.New(cfg.FetchProxy), market.New(cfg.FetchProxy), eng, cfg.Location)
 	if err := sched.Start(); err != nil {
 		log.Fatal(err)
 	}
@@ -59,9 +72,9 @@ func main() {
 		webDir = ""
 	}
 	api := &httpapi.Server{
-		Store:     st,
-		Location:  cfg.Location,
-		Refresh:   sched.RefreshNow,
+		Store:    st,
+		Location: cfg.Location,
+		Refresh:  sched.RefreshNow,
 		WebDir:   webDir,
 		Models:   names,
 	}

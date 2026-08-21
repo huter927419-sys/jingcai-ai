@@ -160,6 +160,9 @@ export type ModelTake = {
   headline: string;
   plainTalk: string;
   buyTalk?: string;
+  pattern?: string;
+  scores?: string[];
+  pickHandicap?: string;
   homeWin: number;
   draw: number;
   awayWin: number;
@@ -207,6 +210,7 @@ export type MatchDetail = {
   oddsClose?: OddsBoard | null;
   market?: MarketQuote | null;
   preview?: TeamPreview | null;
+  expertKind?: "open" | "close";
 };
 
 export type PlayerXI = { no?: string; name: string; pos?: string };
@@ -284,6 +288,19 @@ export function fmtVol(v?: number): string {
 }
 
 export type MatchSort = "num" | "kick";
+
+export type WeekMatch = MatchRow & {
+  analysisCount: number;
+  hasMarket: boolean;
+  hasPreview: boolean;
+};
+
+export async function fetchWeek(): Promise<{ from: string; to: string; total: number; matches: WeekMatch[] }> {
+  const r = await fetch("/api/week");
+  if (!r.ok) throw new Error("week failed");
+  const j = await r.json();
+  return { from: j.from, to: j.to, total: Number(j.total ?? 0), matches: j.matches ?? [] };
+}
 
 function seqNo(numStr: string): number {
   const m = numStr.match(/(\d+)\s*$/);

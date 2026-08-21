@@ -7,3 +7,4 @@ web/tsconfig.tsbuildinfo
 *.db
 .DS_Store
 tmp/
+logs/

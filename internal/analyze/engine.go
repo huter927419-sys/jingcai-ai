@@ -170,18 +170,21 @@ func takesFromHits(hits []modelHit, seed lambdaest.Seed) []store.ModelTake {
 		}
 		res := poisson.Evaluate(lh, la)
 		t := store.ModelTake{
-			Name:      h.name,
-			Headline:  clip(h.out.Headline, 40),
-			PlainTalk: strings.TrimSpace(h.out.PlainTalk),
-			BuyTalk:   strings.TrimSpace(h.out.BuyTalk),
-			HomeWin:   res.HomeWin,
-			Draw:      res.Draw,
-			AwayWin:   res.AwayWin,
-			Over25:    res.Over25,
-			Under25:   res.Under25,
-			Pick1X2:   h.out.Pick1X2,
-			PickOU:    h.out.PickOU,
-			Verdict:   h.out.Verdict,
+			Name:         h.name,
+			Headline:     clip(h.out.Headline, 40),
+			PlainTalk:    strings.TrimSpace(h.out.PlainTalk),
+			BuyTalk:      strings.TrimSpace(h.out.BuyTalk),
+			Pattern:      strings.TrimSpace(h.out.Pattern),
+			Scores:       h.out.Scores,
+			PickHandicap: strings.TrimSpace(h.out.PickHandicap),
+			HomeWin:      res.HomeWin,
+			Draw:         res.Draw,
+			AwayWin:      res.AwayWin,
+			Over25:       res.Over25,
+			Under25:      res.Under25,
+			Pick1X2:      h.out.Pick1X2,
+			PickOU:       h.out.PickOU,
+			Verdict:      h.out.Verdict,
 		}
 		experts.Decorate(&t)
 		out = append(out, t)
@@ -301,7 +304,7 @@ func buildRolePrompt(role experts.Role, m sporttery.Match, kind store.SnapshotKi
 	if q != nil && q.Betfair != nil {
 		fmt.Fprintf(&b, "必发成交 主%.0f 平%.0f 客%.0f。%s\n", q.Betfair.HomeVol, q.Betfair.DrawVol, q.Betfair.AwayVol, q.Betfair.Note)
 	}
-	b.WriteString("请给出完整解读，并明确竞彩怎么买（胜平负/让球/大小 2.5 买哪一侧，或放弃）。不要写金额。只根据赛前资料预测，不要假设已经踢完。\n")
+	b.WriteString("严格围绕当前角色的专业职责展开，不要平均复述所有数据。必须引用至少两项具体证据，并说明证据如何支持或削弱结论。最后明确主方向、胜平负、让球、大小球和两个情景比分；比分只用于描述比赛路径。参考买入必须写明临场失效条件和风险，不能承诺结果或收益。资料没有提供的内容必须写未确认，严禁补造。只根据赛前资料预测，不要假设已经踢完。\n")
 	return b.String()
 }
 
@@ -312,7 +315,7 @@ func buildSoftRolePrompt(role experts.Role, m sporttery.Match, kind store.Snapsh
 	b.WriteString(lineupLine(prev))
 	b.WriteString(marketLine(q))
 	b.WriteString(valueLine(seed, q))
-	b.WriteString("请输出 JSON，含完整解读和怎么买。")
+	b.WriteString("伤停名单未提供时必须明确写未确认。请输出 JSON，按盘口、阵型人员、价值、格局解读，并明确胜平负、让球、大小球和两个情景比分；比分不得写成确定结果。")
 	return b.String()
 }
 
@@ -386,7 +389,7 @@ func marketLine(q *market.Quote) string {
 
 func lineupLine(p *market.Preview) string {
 	if p == nil {
-		return "阵容还没齐。\n"
+		return "阵型、首发和伤停资料还没齐；不得推测具体缺阵球员。\n"
 	}
 	var b strings.Builder
 	writeSide := func(tag string, s market.SidePreview) {
@@ -408,6 +411,7 @@ func lineupLine(p *market.Preview) string {
 	}
 	writeSide("主队", p.Home)
 	writeSide("客队", p.Away)
+	b.WriteString("伤停名单未接入；只能依据已确认首发、替补和近期状态判断，不得虚构伤停。\n")
 	if b.Len() == 0 {
 		return "阵容还没齐。\n"
 	}

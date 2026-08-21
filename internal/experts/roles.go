@@ -16,15 +16,15 @@ type Role struct {
 func Of(model string) Role {
 	switch strings.TrimSpace(model) {
 	case "DeepSeek":
-		return Role{Key: "value", Title: "价值猎手", Hint: "定方向，过价值差、松紧、热门三关"}
+		return Role{Key: "value", Title: "价值研判师", Hint: "专注市场定价与比赛概率的偏差，结合价格保护、拥挤风险和临场变化给出执行等级。使用定价偏差、价格空间、市场保护、风险溢价、价值回落等专业表达，不透露专属权重和综合算法。"}
 	case "Grok":
-		return Role{Key: "market", Title: "盘口专家", Hint: "对照 Bet365 和必发，看有没有过热"}
+		return Role{Key: "market", Title: "盘口分析师", Hint: "专注欧赔、亚洲盘、大小球与成交分布的联动。必须解释初盘到当前盘的升盘、降盘、退盘、升降水、阻上、诱盘或盘赔背离，以及这些变化对应的机构态度。"}
 	case "ChatGPT":
-		return Role{Key: "goals", Title: "进球专家", Hint: "只看大小 2.5 和更常见的比分"}
+		return Role{Key: "goals", Title: "进球分析师", Hint: "专注比赛节奏与进球路径。结合阵型、压迫强度、攻守转换、边路纵深、肋部利用、定位球和大小球盘，判断开放或胶着格局及合理进球区间。"}
 	case "Claude":
-		return Role{Key: "lineup", Title: "阵容专家", Hint: "看首发和近期状态能不能撑住这个判断"}
+		return Role{Key: "lineup", Title: "阵容分析师", Hint: "专注阵型对位、首发结构、替补深度和伤停影响。分析中前场配置、边翼卫站位、中场人数优势、防线速度与对位弱点；未提供的伤停不得推测。"}
 	default:
-		return Role{Key: "value", Title: "价值猎手", Hint: "定方向，过三关"}
+		return Role{Key: "value", Title: "价值研判师", Hint: "综合市场定价、价格保护与风险信号给出条件性结论。"}
 	}
 }
 
@@ -71,14 +71,14 @@ func Decorate(t *store.ModelTake) {
 
 func DefaultAdvice(t store.ModelTake) string {
 	if t.Verdict == "放弃" {
-		return "建议放弃。胜平负和大小都先不买。"
+		return "参考买入：当前盘价缺乏足够保护，胜平负与大小球均建议回避，等待临场重新确认。"
 	}
 	had := "胜平负看" + t.Pick1X2
 	ou := "大小 2.5 看" + t.PickOU
 	if t.Verdict == "主推" {
-		return fmt.Sprintf("竞彩%s，结论主推。%s。优先买这一侧，别再追另一边。", had, ou)
+		return fmt.Sprintf("参考买入：主方向%s，次方向%s；当前信号达到主推等级，临场若出现退盘或核心首发变化则降低等级。", had, ou)
 	}
-	return fmt.Sprintf("竞彩%s，结论可看。%s。可以看，不必急着上。", had, ou)
+	return fmt.Sprintf("参考买入：主方向%s，次方向%s；当前为可看等级，建议等待临场盘价和首发信息进一步确认。", had, ou)
 }
 
 func Norm1X2(s string) string {

@@ -1,4 +1,4 @@
-.PHONY: dev backend web tidy test build
+.PHONY: dev backend web tidy test build ai-logs
 
 dev:
 	$(MAKE) -j2 backend web
@@ -18,3 +18,6 @@ test:
 build:
 	cd web && npm run build
 	go build -o bin/server ./cmd/server
+
+ai-logs:
+	tail -f logs/ai/ai-$$(date +%F).jsonl

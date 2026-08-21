@@ -9,6 +9,8 @@ import (
 
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
+
+	"jingcai-ai/internal/fetchhttp"
 )
 
 const (
@@ -24,8 +26,8 @@ type Client struct {
 	HTTP *http.Client
 }
 
-func New() *Client {
-	return &Client{HTTP: &http.Client{Timeout: 20 * time.Second}}
+func New(proxy string) *Client {
+	return &Client{HTTP: fetchhttp.Client(20*time.Second, proxy)}
 }
 
 func (c *Client) MapIDs() (map[int64]int64, error) {

@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"jingcai-ai/internal/fetchhttp"
 )
 
 const Endpoint = "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had,crs,ttg,hafu&channel=c"
@@ -41,8 +43,8 @@ type Client struct {
 	HTTP *http.Client
 }
 
-func New() *Client {
-	return &Client{HTTP: &http.Client{Timeout: 25 * time.Second}}
+func New(proxy string) *Client {
+	return &Client{HTTP: fetchhttp.Client(25*time.Second, proxy)}
 }
 
 func (c *Client) Fetch(loc *time.Location) ([]Match, error) {

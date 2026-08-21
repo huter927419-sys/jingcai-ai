@@ -58,22 +58,25 @@ type Snapshot struct {
 }
 
 type ModelTake struct {
-	Name      string  `json:"name"`
-	Role      string  `json:"role,omitempty"`
-	RoleKey   string  `json:"roleKey,omitempty"`
-	Headline  string  `json:"headline"`
-	PlainTalk string  `json:"plainTalk"`
-	HomeWin   float64 `json:"homeWin"`
-	Draw      float64 `json:"draw"`
-	AwayWin   float64 `json:"awayWin"`
-	Over25    float64 `json:"over25"`
-	Under25   float64 `json:"under25"`
-	BuyTalk   string  `json:"buyTalk,omitempty"`
-	Pick1X2   string  `json:"pick1x2,omitempty"`
-	PickOU    string  `json:"pickOu,omitempty"`
-	Verdict   string  `json:"verdict,omitempty"`
-	Hit1X2    *bool   `json:"hit1x2,omitempty"`
-	HitOU     *bool   `json:"hitOu,omitempty"`
+	Name         string   `json:"name"`
+	Role         string   `json:"role,omitempty"`
+	RoleKey      string   `json:"roleKey,omitempty"`
+	Headline     string   `json:"headline"`
+	PlainTalk    string   `json:"plainTalk"`
+	HomeWin      float64  `json:"homeWin"`
+	Draw         float64  `json:"draw"`
+	AwayWin      float64  `json:"awayWin"`
+	Over25       float64  `json:"over25"`
+	Under25      float64  `json:"under25"`
+	BuyTalk      string   `json:"buyTalk,omitempty"`
+	Pattern      string   `json:"pattern,omitempty"`
+	Scores       []string `json:"scores,omitempty"`
+	PickHandicap string   `json:"pickHandicap,omitempty"`
+	Pick1X2      string   `json:"pick1x2,omitempty"`
+	PickOU       string   `json:"pickOu,omitempty"`
+	Verdict      string   `json:"verdict,omitempty"`
+	Hit1X2       *bool    `json:"hit1x2,omitempty"`
+	HitOU        *bool    `json:"hitOu,omitempty"`
 }
 
 type persistedResult struct {
@@ -293,6 +296,17 @@ func (s *Store) ListUpcoming(from time.Time) ([]MatchRow, error) {
 WHERE m.kickoff >= ?
 ORDER BY m.business_date ASC, CAST(substr(m.num_str, -3) AS INTEGER) ASC, m.kickoff ASC
 `, from.Format(time.RFC3339))
+	if err != nil {
+		return nil, err
+	}
+	return scanMatches(rows)
+}
+
+func (s *Store) ListBetween(from, to time.Time) ([]MatchRow, error) {
+	rows, err := s.DB.Query(matchSelect+`
+WHERE m.kickoff >= ? AND m.kickoff < ?
+ORDER BY m.business_date ASC, CAST(substr(m.num_str, -3) AS INTEGER) ASC, m.kickoff ASC
+`, from.Format(time.RFC3339), to.Format(time.RFC3339))
 	if err != nil {
 		return nil, err
 	}

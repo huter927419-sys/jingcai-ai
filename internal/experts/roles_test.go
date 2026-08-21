@@ -1,6 +1,7 @@
 package experts
 
 import (
+	"strings"
 	"testing"
 
 	"jingcai-ai/internal/store"
@@ -31,8 +32,11 @@ func TestNormAndGrade(t *testing.T) {
 func TestFillPicksFromShape(t *testing.T) {
 	take := storeTake("Grok", 20, 22, 58, 30, 70, "", "", "")
 	Decorate(&take)
-	if take.Role != "盘口专家" || take.Pick1X2 != "负" || take.PickOU != "小" || take.Verdict != "可看" {
+	if take.Role != "盘口分析师" || take.Pick1X2 != "负" || take.PickOU != "小" || take.Verdict != "可看" {
 		t.Fatalf("%+v", take)
+	}
+	if !strings.HasPrefix(take.BuyTalk, "参考买入：") || !strings.Contains(take.BuyTalk, "临场") {
+		t.Fatalf("advice missing reference or invalidation condition: %q", take.BuyTalk)
 	}
 }
 

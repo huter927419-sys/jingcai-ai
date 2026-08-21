@@ -31,6 +31,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", s.health)
 	mux.HandleFunc("GET /api/today", s.today)
+	mux.HandleFunc("GET /api/week", s.week)
 	mux.HandleFunc("GET /api/experts", s.experts)
 	mux.HandleFunc("GET /api/matches/{id}", s.match)
 	mux.HandleFunc("POST /api/admin/refresh", s.refresh)
@@ -40,6 +41,57 @@ func (s *Server) Handler() http.Handler {
 		}
 	}
 	return withCORS(mux)
+}
+
+func (s *Server) week(w http.ResponseWriter, r *http.Request) {
+	from := store.WeekStart(time.Now().In(s.Location))
+	list, err := s.Store.ListBetween(from, from.AddDate(0, 0, 7))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	type item struct {
+		store.MatchRow
+		Status        string `json:"status"`
+		Kind          string `json:"kind,omitempty"`
+		AnalysisCount int    `json:"analysisCount"`
+		HasMarket     bool   `json:"hasMarket"`
+		HasPreview    bool   `json:"hasPreview"`
+	}
+	out := make([]item, 0, len(list))
+	for _, m := range list {
+		it := item{MatchRow: m, Status: "待分析"}
+		sn, _ := s.Store.PreferredSnapshot(m.ID)
+		if sn != nil {
+			it.Kind = string(sn.Kind)
+			it.AnalysisCount = len(sn.Takes)
+			if it.AnalysisCount == 0 && sn.Kind == store.KindClose {
+				if open, _ := s.Store.GetSnapshot(m.ID, store.KindOpen); open != nil {
+					it.AnalysisCount = len(open.Takes)
+				}
+			}
+			it.Status = "赛前"
+			if sn.Kind == store.KindClose {
+				it.Status = "临场"
+			}
+		}
+		if m.Finished {
+			it.Status = "完场"
+		}
+		if q, err := s.Store.GetQuote(m.ID); err == nil && q != nil {
+			it.HasMarket = true
+		}
+		if p, err := s.Store.GetPreview(m.ID); err == nil && p != nil {
+			it.HasPreview = true
+		}
+		out = append(out, it)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"from":    from.Format("2006-01-02"),
+		"to":      from.AddDate(0, 0, 6).Format("2006-01-02"),
+		"matches": out,
+		"total":   len(out),
+	})
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
@@ -143,9 +195,14 @@ func (s *Server) match(w http.ResponseWriter, r *http.Request) {
 	q, _ := s.Store.GetQuote(id)
 	prev, _ := s.Store.GetPreview(id)
 	pub := store.ToPublic(sn, q)
-	gradeTakes(pub.Takes, m)
 	open, _ := s.Store.GetSnapshot(id, store.KindOpen)
 	closeSn, _ := s.Store.GetSnapshot(id, store.KindClose)
+	expertKind := sn.Kind
+	if len(pub.Takes) == 0 && sn.Kind == store.KindClose && open != nil && len(open.Takes) > 0 {
+		pub.Takes = append([]store.ModelTake(nil), open.Takes...)
+		expertKind = store.KindOpen
+	}
+	gradeTakes(pub.Takes, m)
 	var oddsOpen, oddsClose *eval.Board
 	if open != nil {
 		oddsOpen = eval.BoardFromJSON(open.OddsJSON)
@@ -154,15 +211,16 @@ func (s *Server) match(w http.ResponseWriter, r *http.Request) {
 		oddsClose = eval.BoardFromJSON(closeSn.OddsJSON)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"match":     m,
-		"available": kinds,
-		"status":    statusOfMatch(m, sn.Kind),
-		"source":    "sqlite",
-		"snapshot":  pub,
-		"oddsOpen":  oddsOpen,
-		"oddsClose": oddsClose,
-		"market":    q,
-		"preview":   prev,
+		"match":      m,
+		"available":  kinds,
+		"status":     statusOfMatch(m, sn.Kind),
+		"source":     "sqlite",
+		"snapshot":   pub,
+		"oddsOpen":   oddsOpen,
+		"oddsClose":  oddsClose,
+		"market":     q,
+		"preview":    prev,
+		"expertKind": expertKind,
 	})
 }
 
