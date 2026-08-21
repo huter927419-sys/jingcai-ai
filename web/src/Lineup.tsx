@@ -11,6 +11,7 @@ export function LineupBoard({ preview }: { preview: TeamPreview }) {
 
 function SideCard({ side, team }: { side: SidePreview; team: "home" | "away" }) {
   const rows = formationRows(side.starters ?? [], side.formation);
+  const positions = rowPositions(rows.length);
   return (
     <div className={`xi-card ${team}`}>
       <div className="xi-head">
@@ -35,7 +36,7 @@ function SideCard({ side, team }: { side: SidePreview; team: "home" | "away" }) 
         {rows.length ? (
           <div className="formation-lines">
             {rows.map((row, i) => (
-            <div className={`pitch-row line-${i + 1}`} key={i}>
+            <div className={`pitch-row line-${i + 1}`} style={{ top: `${positions[i]}%` }} key={i}>
               {row.map((p) => (
                 <div className="pitch-p" key={`${p.no}-${p.name}`}>
                   <i>{p.no || "·"}</i>
@@ -91,6 +92,14 @@ function splitLine(players: PlayerXI[], preferred: number): PlayerXI[][] {
   if (players.length <= 4) return [players];
   const firstSize = Math.min(4, Math.max(2, preferred > 4 ? Math.ceil(players.length / 2) : preferred));
   return [players.slice(0, firstSize), players.slice(firstSize)].filter((row) => row.length);
+}
+
+function rowPositions(count: number): number[] {
+  if (count === 5) return [19, 34, 61, 76, 90];
+  if (count === 4) return [19, 37, 67, 90];
+  if (count === 3) return [23, 58, 88];
+  if (count === 2) return [30, 85];
+  return [50];
 }
 
 function shortName(name: string): string {

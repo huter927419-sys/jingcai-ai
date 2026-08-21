@@ -175,6 +175,35 @@ CREATE TABLE IF NOT EXISTS match_previews (
   preview_json TEXT NOT NULL,
   FOREIGN KEY (match_id) REFERENCES matches(id)
 );
+CREATE TABLE IF NOT EXISTS access_codes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code_hash TEXT NOT NULL UNIQUE,
+  code_display TEXT NOT NULL UNIQUE,
+  duration_days INTEGER NOT NULL CHECK(duration_days IN (3,7,15,30)),
+  created_at TEXT NOT NULL,
+  activated_at TEXT,
+  expires_at TEXT,
+  terminated_at TEXT,
+  last_seen_at TEXT,
+  activation_ip TEXT,
+  use_count INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS access_sessions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code_id INTEGER NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  revoked_at TEXT,
+  FOREIGN KEY(code_id) REFERENCES access_codes(id)
+);
+CREATE TABLE IF NOT EXISTS admin_sessions (
+  token_hash TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_access_codes_duration ON access_codes(duration_days);
+CREATE INDEX IF NOT EXISTS idx_access_sessions_code ON access_sessions(code_id);
 `)
 	if err != nil {
 		return err

@@ -1,3 +1,5 @@
+import { VerdictBadge } from "./VerdictHelp";
+
 type Bar = { label: string; value: number; color: string };
 
 export function BarChart({
@@ -355,7 +357,7 @@ export function GateBoard({
             <div className={`outcome${s.picked ? " on" : ""}`} key={s.key}>
               <div className="outcome-top">
                 <strong>{s.label}</strong>
-                <span className={`verdict v-${s.verdict}`}>{s.verdict === "放弃" ? "回避" : s.verdict}</span>
+                <VerdictBadge verdict={s.verdict} />
               </div>
               <div className={`outcome-diff ${s.value >= 0 ? "pos" : "neg"}`}>
                 {s.value > 0 ? "+" : ""}

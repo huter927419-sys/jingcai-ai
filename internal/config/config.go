@@ -24,6 +24,10 @@ type Config struct {
 	AILogRetention time.Duration
 	FetchProxy     string
 	Location       *time.Location
+	AdminUsername  string
+	AdminPassword  string
+	CookieSecure   bool
+	AdminPath      string
 }
 
 func Load() Config {
@@ -50,7 +54,19 @@ func Load() Config {
 		AILogRetention: durationEnv("AI_LOG_RETENTION", 48*time.Hour),
 		FetchProxy:     os.Getenv("FETCH_PROXY"),
 		Location:       loc,
+		AdminUsername:  getenv("ADMIN_USERNAME", "admin"),
+		AdminPassword:  os.Getenv("ADMIN_PASSWORD"),
+		CookieSecure:   strings.EqualFold(os.Getenv("ACCESS_COOKIE_SECURE"), "true"),
+		AdminPath:      normalizePath(getenv("ADMIN_PATH", "/console-k7m4x9")),
 	}
+}
+
+func normalizePath(v string) string {
+	v = "/" + strings.Trim(strings.TrimSpace(v), "/")
+	if v == "/" {
+		return "/console-k7m4x9"
+	}
+	return v
 }
 
 func durationEnv(k string, def time.Duration) time.Duration {

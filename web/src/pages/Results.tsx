@@ -38,6 +38,12 @@ export default function Results() {
   const ranked = board.filter((r) => r.games > 0);
   const leader = ranked[0];
   const verified = settled.length;
+  const totals = board.reduce((sum, row) => ({
+    hadRight: sum.hadRight + row.hit1x2,
+    hadWrong: sum.hadWrong + Math.max(0, row.games - row.hit1x2),
+    ouRight: sum.ouRight + row.hitOu,
+    ouWrong: sum.ouWrong + Math.max(0, row.games - row.hitOu),
+  }), { hadRight: 0, hadWrong: 0, ouRight: 0, ouWrong: 0 });
 
   return (
     <Layout>
@@ -65,6 +71,11 @@ export default function Results() {
           <span>领先大小球<strong>{leader?.games ? `${leader.rateOu.toFixed(0)}%` : "—"}</strong></span>
         </div>
       </section>
+      <section className="audit-scoreboard" aria-label="分项对错统计">
+        <div className="audit-scoreboard-head"><span>分项核对</span><b>每个玩法单独判定，不合并成绩</b></div>
+        <AuditStat title="胜平负方向" right={totals.hadRight} wrong={totals.hadWrong} />
+        <AuditStat title="大小球方向" right={totals.ouRight} wrong={totals.ouWrong} />
+      </section>
       {err ? <div className="err">{err}</div> : null}
       {pending > 0 ? (
         <p className="layer-talk" style={{ marginBottom: 16 }}>
@@ -79,8 +90,7 @@ export default function Results() {
             <>
               {leader ? (
                 <p className="layer-talk" style={{ marginBottom: 16 }}>
-                  目前表现领先的是{leader.role}，胜平负 {leader.hit1x2}/{leader.games}，大小{" "}
-                  {leader.hitOu}/{leader.games}。
+                  当前综合表现领先的是{leader.role}。下方按胜平负方向和大小球方向分别统计，对就是对 ✅，错就是错 ❌。
                 </p>
               ) : null}
               <GroupBars
@@ -102,15 +112,11 @@ export default function Results() {
                     <div className="play-prices two">
                       <div>
                         <b>{r.games ? `${r.rate1x2.toFixed(0)}%` : "—"}</b>
-                        <span>
-                          胜平负 {r.hit1x2}/{r.games}
-                        </span>
+                        <span>胜平负 · 对 ✅ {r.hit1x2} · 错 ❌ {Math.max(0, r.games - r.hit1x2)}</span>
                       </div>
                       <div>
                         <b>{r.games ? `${r.rateOu.toFixed(0)}%` : "—"}</b>
-                        <span>
-                          大小 {r.hitOu}/{r.games}
-                        </span>
+                        <span>大小球 · 对 ✅ {r.hitOu} · 错 ❌ {Math.max(0, r.games - r.hitOu)}</span>
                       </div>
                     </div>
                   </div>
@@ -129,6 +135,18 @@ export default function Results() {
         </>
       )}
     </Layout>
+  );
+}
+
+function AuditStat({ title, right, wrong }: { title: string; right: number; wrong: number }) {
+  const total = right + wrong;
+  const rate = total ? (right / total) * 100 : 0;
+  return (
+    <div className="audit-stat">
+      <div><span>{title}</span><strong>{total ? `${rate.toFixed(0)}%` : "—"}</strong><small>{total} 个有效判断</small></div>
+      <div className="audit-counts"><b className="right">对 ✅ <em>{right}</em></b><b className="wrong">错 ❌ <em>{wrong}</em></b></div>
+      <div className="audit-bar"><i style={{ width: `${rate}%` }} /></div>
+    </div>
   );
 }
 
@@ -183,11 +201,17 @@ function PickRow({ t }: { t: ModelTake }) {
       <span className="result-who">
         {t.role || "专业研判"}
       </span>
-      <span className={t.hit1x2 ? "hit" : "miss"}>胜平负 {t.pick1x2 || "—"}</span>
-      <span className={t.hitOu ? "hit" : "miss"}>大小 {t.pickOu || "—"}</span>
+      <PickResult label="胜平负" pick={t.pick1x2} hit={t.hit1x2} />
+      <PickResult label="大小球" pick={t.pickOu} hit={t.hitOu} />
       {t.verdict ? <span className={`verdict v-${t.verdict}`}>{t.verdict}</span> : null}
     </div>
   );
+}
+
+function PickResult({ label, pick, hit }: { label: string; pick?: string; hit?: boolean }) {
+  if (!pick) return <span className="no-pick"><small>{label}</small><b>未预测</b></span>;
+  const right = hit === true;
+  return <span className={`pick-result ${right ? "hit" : "miss"}`}><small>{label} · 预测 {pick}</small><b>{right ? "对 ✅" : "错 ❌"}</b></span>;
 }
 
 function actualOf(score: string): { had: string; ou: string } {

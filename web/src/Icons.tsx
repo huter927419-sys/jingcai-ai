@@ -95,6 +95,14 @@ export const IconTalk = (p: IconProps) => (
   </Svg>
 );
 
+export const IconHelpCircle = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M9.7 9a2.5 2.5 0 1 1 3.8 2.1c-.9.55-1.5 1.05-1.5 2.4" />
+    <path d="M12 17h.01" />
+  </Svg>
+);
+
 export const IconGrid = (p: IconProps) => (
   <Svg {...p}>
     <rect x="4" y="4" width="7" height="7" />

@@ -31,6 +31,7 @@ import {
 } from "../Charts";
 import { IconBack, IconBall, IconChart, IconClock, IconGauge, IconGrid, IconScale, IconTalk } from "../Icons";
 import { LineupBoard } from "../Lineup";
+import { VerdictBadge, VerdictHelp, verdictLabel } from "../VerdictHelp";
 
 export default function Match() {
   const { id } = useParams();
@@ -135,7 +136,7 @@ export default function Match() {
             <div className="verdict-side">
               {best ? (
                 <>
-                  <span className={`verdict v-${best.verdict}`}>{best.verdict}</span>
+                  <VerdictBadge verdict={best.verdict} />
                   <b>{best.label}</b>
                 </>
               ) : (
@@ -239,7 +240,7 @@ function DetailOverview({ sn, best, now, previewReady }: { sn: Snapshot; best?: 
       <div><IconGauge size={17} /><span>主方向<strong>{outcomes[0].label}</strong><small>{outcomes[0].p.toFixed(1)}%</small></span></div>
       <div><IconChart size={17} /><span>方向强度<strong>{gap >= 18 ? "清晰" : gap >= 8 ? "倾向" : "胶着"}</strong><small>领先次选 {gap.toFixed(1)}%</small></span></div>
       <div><IconBall size={17} /><span>进球倾向<strong>{sn.over25 >= 52 ? "偏大" : sn.over25 <= 48 ? "偏小" : "均衡"}</strong><small>大 2.5 {sn.over25.toFixed(1)}%</small></span></div>
-      <div><IconScale size={17} /><span>价值等级<strong>{best?.verdict === "放弃" ? "回避" : best?.verdict || "待确认"}</strong><small>{best?.label || "等待市场数据"}</small></span></div>
+      <div><IconScale size={17} /><span>价值等级<strong>{best?.verdict ? <>{verdictLabel(best.verdict)} <VerdictHelp verdict={best.verdict} /></> : "待确认"}</strong><small>{best?.label || "等待市场数据"}</small></span></div>
       <div><IconGrid size={17} /><span>数据覆盖<strong>{dataCount}/3</strong><small>票面 · 阵容 · 研判</small></span></div>
     </section>
   );
@@ -291,7 +292,7 @@ function AICompare({
               <article className={`ai-card role-${t.roleKey || "general"}${t.verdict === "主推" ? " blend" : ""}`} key={t.name}>
                 <div className="ai-card-head">
                   <div className="expert-identity"><span>{String(index + 1).padStart(2, "0")}</span><div><b>{roleTitle(t.roleKey, t.role)}</b><small>{meta.focus}</small></div></div>
-                  {t.verdict ? <span className={`verdict v-${t.verdict}`}>{t.verdict === "放弃" ? "回避" : t.verdict}</span> : null}
+                  {t.verdict ? <VerdictBadge verdict={t.verdict} /> : null}
                 </div>
                 <h3>{t.headline || "研判结论待确认"}</h3>
                 <div className="dir-chips">
@@ -337,7 +338,7 @@ function TradePlan({ sn, cards }: { sn: Snapshot; cards: ModelTake[] }) {
   const pattern = cards.find((t) => t.pattern)?.pattern || patternOf(sn);
   return (
     <section className="trade-plan">
-      <div className="trade-plan-head"><span>综合执行方案</span><b>{active.some((t) => t.verdict === "主推") ? "具备主推条件" : "谨慎参考"}</b></div>
+      <div className="trade-plan-head"><span>综合执行方案</span><b>{active.some((t) => t.verdict === "主推") ? <>具备主推条件 <VerdictHelp verdict="主推" /></> : "谨慎参考"}</b></div>
       <div className="trade-plan-grid">
         <div><span>比赛格局</span><strong>{pattern}</strong></div>
         <div className="primary"><span>主方向</span><strong>胜平负 {pick || "待确认"}</strong></div>
@@ -572,12 +573,12 @@ function ValueMatrix({ had, ou, asia, picked }: { had: GateSide[]; ou: GateSide[
     <section className="value-matrix">
       <div className="matrix-head">
         <div><span>JC VALUE MATRIX</span><h3>专属价值研判结果</h3><p>综合比赛概率、机构态度、资金分布与临场变化。仅展示结论，不公开权重、阈值及组合逻辑。</p></div>
-        <div className={`matrix-verdict v-${best?.verdict || "放弃"}`}><small>综合等级</small><strong>{best?.verdict === "放弃" ? "回避" : best?.verdict || "等待数据"}</strong></div>
+        <div className={`matrix-verdict v-${best?.verdict || "放弃"}`}><small>综合等级</small><strong>{best?.verdict ? <>{verdictLabel(best.verdict)} <VerdictHelp verdict={best.verdict} /></> : "等待数据"}</strong></div>
       </div>
       <div className="verdict-guide" aria-label="价值等级说明">
-        <div className="main"><span>主推</span><b>方向与价格共振</b><small>多项关键信号一致，当前具备优先执行条件</small></div>
-        <div className="watch"><span>可看</span><b>方向成立，条件未齐</b><small>保留关注，等待更好价格或临场信号确认</small></div>
-        <div className="avoid"><span>回避</span><b>当前不具备价值</b><small>价格、保护或拥挤风险不利，不建议执行</small></div>
+        <div className="main"><span>主推 <VerdictHelp verdict="主推" /></span><b>方向与价格共振</b><small>多项关键信号一致，当前具备优先执行条件</small></div>
+        <div className="watch"><span>可看 <VerdictHelp verdict="可看" /></span><b>方向成立，条件未齐</b><small>保留关注，等待更好价格或临场信号确认</small></div>
+        <div className="avoid"><span>回避 <VerdictHelp verdict="回避" /></span><b>当前不具备价值</b><small>价格、保护或拥挤风险不利，不建议执行</small></div>
       </div>
       <div className="matrix-signals">
         <div><span>价格匹配度</span><b>{priceMatch ? "具备空间" : "空间有限"}</b><i className={priceMatch ? "good" : "mid"} /></div>
@@ -601,7 +602,7 @@ function ValueMatrix({ had, ou, asia, picked }: { had: GateSide[]; ou: GateSide[
 
 function PrivateMarket({ title, sides }: { title: string; sides: GateSide[] }) {
   const ordered = [...sides].sort((a, b) => rank(b.verdict) - rank(a.verdict) || b.value - a.value);
-  return <div className="private-market"><span>{title}</span>{ordered.length ? ordered.map((s) => <div key={s.key}><b>{s.label}</b><em className={`v-${s.verdict}`}>{s.verdict === "放弃" ? "回避" : s.verdict}</em><small>{s.hot ? "市场偏热" : s.verdict === "主推" ? "价值共振" : "等待确认"}</small></div>) : <p>市场数据采集中</p>}</div>;
+  return <div className="private-market"><span>{title}</span>{ordered.length ? ordered.map((s) => <div key={s.key}><b>{s.label}</b><em className={`v-${s.verdict}`}>{verdictLabel(s.verdict)} <VerdictHelp verdict={s.verdict} /></em><small>{s.hot ? "市场偏热" : s.verdict === "主推" ? "价值共振" : "等待确认"}</small></div>) : <p>市场数据采集中</p>}</div>;
 }
 
 function rank(v: GateSide["verdict"]): number {

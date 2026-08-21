@@ -29,6 +29,11 @@ func main() {
 		log.Fatal(err)
 	}
 	defer st.Close()
+	for _, days := range []int{3, 7, 15, 30} {
+		if err := st.EnsureAccessPool(days, 1000); err != nil {
+			log.Fatal(err)
+		}
+	}
 
 	var models []*grok.Client
 	if cfg.APIKey != "" {
@@ -72,11 +77,12 @@ func main() {
 		webDir = ""
 	}
 	api := &httpapi.Server{
-		Store:    st,
-		Location: cfg.Location,
-		Refresh:  sched.RefreshNow,
-		WebDir:   webDir,
-		Models:   names,
+		Store:         st,
+		Location:      cfg.Location,
+		Refresh:       sched.RefreshNow,
+		WebDir:        webDir,
+		Models:        names,
+		AdminUsername: cfg.AdminUsername, AdminPassword: cfg.AdminPassword, AdminPath: cfg.AdminPath, CookieSecure: cfg.CookieSecure,
 	}
 	log.Printf("listening %s  sqlite=%s/jingcai.db", cfg.Listen, cfg.DataDir)
 	if err := http.ListenAndServe(cfg.Listen, api.Handler()); err != nil {

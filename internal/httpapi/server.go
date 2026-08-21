@@ -20,27 +20,191 @@ import (
 )
 
 type Server struct {
-	Store    *store.Store
-	Location *time.Location
-	Refresh  func() error
-	WebDir   string
-	Models   []string
+	Store         *store.Store
+	Location      *time.Location
+	Refresh       func() error
+	WebDir        string
+	Models        []string
+	AdminUsername string
+	AdminPassword string
+	AdminPath     string
+	CookieSecure  bool
 }
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", s.health)
-	mux.HandleFunc("GET /api/today", s.today)
-	mux.HandleFunc("GET /api/week", s.week)
-	mux.HandleFunc("GET /api/experts", s.experts)
-	mux.HandleFunc("GET /api/matches/{id}", s.match)
-	mux.HandleFunc("POST /api/admin/refresh", s.refresh)
+	mux.HandleFunc("GET /api/access/status", s.accessStatus)
+	mux.HandleFunc("POST /api/access/redeem", s.accessRedeem)
+	mux.HandleFunc("POST /api/access/logout", s.accessLogout)
+	mux.HandleFunc("POST /api/admin/login", s.adminLogin)
+	mux.HandleFunc("POST /api/admin/logout", s.adminLogout)
+	mux.HandleFunc("GET /api/admin/status", s.adminStatus)
+	mux.HandleFunc("GET /api/admin/access-codes", s.adminCodes)
+	mux.HandleFunc("POST /api/admin/access-codes/generate", s.adminGenerate)
+	mux.HandleFunc("POST /api/admin/access-codes/{id}/terminate", s.adminTerminate)
+	protected := http.NewServeMux()
+	protected.HandleFunc("GET /api/today", s.today)
+	protected.HandleFunc("GET /api/week", s.week)
+	protected.HandleFunc("GET /api/experts", s.experts)
+	protected.HandleFunc("GET /api/matches/{id}", s.match)
+	protected.HandleFunc("POST /api/admin/refresh", s.refresh)
+	mux.Handle("/api/", s.accessMiddleware(protected))
 	if s.WebDir != "" {
 		if _, err := os.Stat(s.WebDir); err == nil {
 			mux.Handle("/", spa(s.WebDir))
 		}
 	}
-	return withCORS(mux)
+	return withCORS(s.adminPath(mux))
+}
+
+func (s *Server) adminPath(next http.Handler) http.Handler {
+	// Admin UI is only served at the configured non-public path.
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/admin") || r.URL.Path == "/admin" {
+			http.NotFound(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) accessMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/admin/") {
+			if !s.isAdmin(r) {
+				writeJSON(w, 401, map[string]any{"error": "admin login required"})
+				return
+			}
+			next.ServeHTTP(w, r)
+			return
+		}
+		c, err := r.Cookie("jc_access")
+		if err != nil {
+			writeJSON(w, 401, map[string]any{"error": "access required"})
+			return
+		}
+		if _, err = s.Store.ValidateAccess(c.Value, time.Now()); err != nil {
+			writeJSON(w, 401, map[string]any{"error": "access required"})
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) isAdmin(r *http.Request) bool {
+	c, e := r.Cookie("jc_admin")
+	return e == nil && s.Store.ValidateAdminSession(c.Value, time.Now())
+}
+func setToken(w http.ResponseWriter, name, val string, maxAge int, secure bool) {
+	http.SetCookie(w, &http.Cookie{Name: name, Value: val, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: secure, MaxAge: maxAge})
+}
+
+func (s *Server) accessStatus(w http.ResponseWriter, r *http.Request) {
+	c, e := r.Cookie("jc_access")
+	if e != nil {
+		writeJSON(w, 200, map[string]any{"authorized": false, "reason": "missing"})
+		return
+	}
+	g, e := s.Store.ValidateAccess(c.Value, time.Now())
+	if e != nil {
+		writeJSON(w, 200, map[string]any{"authorized": false, "reason": "expired"})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"authorized": true, "durationDays": g.DurationDays, "activatedAt": g.ActivatedAt, "expiresAt": g.ExpiresAt, "remainingSeconds": int(time.Until(g.ExpiresAt).Seconds())})
+}
+func (s *Server) accessRedeem(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Code string `json:"code"`
+	}
+	if json.NewDecoder(r.Body).Decode(&in) != nil || len(store.NormalizeCode(in.Code)) != 10 {
+		writeJSON(w, 400, map[string]any{"error": "访问码无效或已使用"})
+		return
+	}
+	g, t, e := s.Store.RedeemAccessCode(in.Code, r.RemoteAddr, time.Now())
+	if e != nil {
+		writeJSON(w, 400, map[string]any{"error": "访问码无效或已使用"})
+		return
+	}
+	setToken(w, "jc_access", t, int(time.Until(g.ExpiresAt).Seconds()), s.CookieSecure)
+	writeJSON(w, 200, map[string]any{"authorized": true, "durationDays": g.DurationDays, "expiresAt": g.ExpiresAt})
+}
+func (s *Server) accessLogout(w http.ResponseWriter, r *http.Request) {
+	if c, e := r.Cookie("jc_access"); e == nil {
+		s.Store.RevokeAccessSession(c.Value)
+	}
+	setToken(w, "jc_access", "", -1, s.CookieSecure)
+	writeJSON(w, 200, map[string]any{"ok": true})
+}
+func (s *Server) adminLogin(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&in)
+	if s.AdminPassword == "" || in.Username != s.AdminUsername || in.Password != s.AdminPassword {
+		writeJSON(w, 401, map[string]any{"error": "账号或密码错误"})
+		return
+	}
+	t, e := s.Store.CreateAdminSession(time.Now())
+	if e != nil {
+		http.Error(w, e.Error(), 500)
+		return
+	}
+	setToken(w, "jc_admin", t, 43200, s.CookieSecure)
+	writeJSON(w, 200, map[string]any{"ok": true})
+}
+func (s *Server) adminLogout(w http.ResponseWriter, r *http.Request) {
+	if c, e := r.Cookie("jc_admin"); e == nil {
+		s.Store.RevokeAdminSession(c.Value)
+	}
+	setToken(w, "jc_admin", "", -1, s.CookieSecure)
+	writeJSON(w, 200, map[string]any{"ok": true})
+}
+func (s *Server) adminStatus(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, map[string]any{"authenticated": s.isAdmin(r)})
+}
+func (s *Server) adminCodes(w http.ResponseWriter, r *http.Request) {
+	if !s.isAdmin(r) {
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "admin login required"})
+		return
+	}
+	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
+	list, total, e := s.Store.ListAccessCodes(days, r.URL.Query().Get("status"), r.URL.Query().Get("q"), 200, 0, time.Now())
+	if e != nil {
+		http.Error(w, e.Error(), 500)
+		return
+	}
+	writeJSON(w, 200, map[string]any{"codes": list, "total": total})
+}
+func (s *Server) adminGenerate(w http.ResponseWriter, r *http.Request) {
+	if !s.isAdmin(r) {
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "admin login required"})
+		return
+	}
+	var in struct{ DurationDays, Count int }
+	_ = json.NewDecoder(r.Body).Decode(&in)
+	if in.Count < 1 || in.Count > 10000 || (in.DurationDays != 3 && in.DurationDays != 7 && in.DurationDays != 15 && in.DurationDays != 30) {
+		writeJSON(w, 400, map[string]any{"error": "参数无效"})
+		return
+	}
+	if e := s.Store.EnsureAccessPool(in.DurationDays, in.Count); e != nil {
+		http.Error(w, e.Error(), 500)
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true})
+}
+func (s *Server) adminTerminate(w http.ResponseWriter, r *http.Request) {
+	if !s.isAdmin(r) {
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "admin login required"})
+		return
+	}
+	id, e := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if e != nil || s.Store.TerminateAccessCode(id, time.Now()) != nil {
+		writeJSON(w, 400, map[string]any{"error": "终止失败"})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true})
 }
 
 func (s *Server) week(w http.ResponseWriter, r *http.Request) {
