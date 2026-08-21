@@ -1,0 +1,9 @@
+.env
+data/
+bin/
+web/node_modules/
+web/dist/
+web/tsconfig.tsbuildinfo
+*.db
+.DS_Store
+tmp/
