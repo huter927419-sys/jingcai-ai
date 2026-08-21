@@ -22,10 +22,10 @@ function Svg({ size = 16, className, children }: IconProps & { children: React.R
 export function IconLogo({ size = 22 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>
-      <rect width="24" height="24" rx="3" fill="#071018" stroke="#22d3ee" strokeWidth="1.2" />
-      <circle cx="12" cy="12" r="6.2" fill="none" stroke="#22d3ee" strokeWidth="1.4" />
-      <path d="M12 6.2v11.6M6.2 12h11.6" stroke="#67e8f9" strokeWidth="1.4" />
-      <path d="M8.2 8.2c2.4 1.6 5.2 1.6 7.6 0M8.2 15.8c2.4-1.6 5.2-1.6 7.6 0" stroke="#a78bfa" strokeWidth="1.2" />
+      <rect width="24" height="24" rx="3" fill="#eef9f5" stroke="#0b9668" strokeWidth="1.2" />
+      <circle cx="12" cy="12" r="6.2" fill="none" stroke="#0b9668" strokeWidth="1.4" />
+      <path d="M12 6.2v11.6M6.2 12h11.6" stroke="#087a55" strokeWidth="1.4" />
+      <path d="M8.2 8.2c2.4 1.6 5.2 1.6 7.6 0M8.2 15.8c2.4-1.6 5.2-1.6 7.6 0" stroke="#3b82f6" strokeWidth="1.2" />
     </svg>
   );
 }
@@ -107,5 +107,18 @@ export const IconGrid = (p: IconProps) => (
 export const IconShield = (p: IconProps) => (
   <Svg {...p}>
     <path d="M12 3l8 3v6c0 5-3.4 8.4-8 9.5C7.4 20.4 4 17 4 12V6l8-3z" />
+  </Svg>
+);
+
+export const IconPulse = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M3 12h4l2.2-5 4.1 10 2.2-5H21" />
+  </Svg>
+);
+
+export const IconSpark = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 3l1.4 4.1L17.5 8.5l-4.1 1.4L12 14l-1.4-4.1-4.1-1.4 4.1-1.4L12 3z" />
+    <path d="M18.5 14.5l.7 2.1 2.1.7-2.1.7-.7 2.1-.7-2.1-2.1-.7 2.1-.7.7-2.1z" />
   </Svg>
 );

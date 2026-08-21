@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { IconLogo } from "./Icons";
+import { IconLogo, IconPulse } from "./Icons";
 
 type ExpertChip = { name: string; role: string };
 
@@ -27,26 +27,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <Link to="/" className="brand">
             <IconLogo />
             <span>
-              竞彩分析
-              <small>今日看板 · 完场看结果</small>
+              JC Intelligence
+              <small>竞彩决策分析终端</small>
             </span>
           </Link>
-          <div className="model-live">
-            <NavLink to="/" end className={({ isActive }) => (isActive ? "hud-chip" : "hud-chip dim")}>
-              今日
+          <nav className="primary-nav" aria-label="主导航">
+            <NavLink to="/" end className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}>
+              今日赛事
             </NavLink>
-            <NavLink to="/results" className={({ isActive }) => (isActive ? "hud-chip" : "hud-chip dim")}>
-              结果
+            <NavLink to="/results" className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}>
+              复盘中心
             </NavLink>
-            {experts.length ? (
-              experts.map((n) => (
-                <span className="hud-chip dim" key={n.name} title={n.name}>
-                  {n.role}
-                </span>
-              ))
-            ) : (
-              <span className="hud-chip dim">LOCAL</span>
-            )}
+          </nav>
+          <div className="system-state" title={experts.length ? experts.map((x) => x.role).join(" · ") : "本地分析引擎"}>
+            <IconPulse size={15} />
+            <span><b>分析引擎</b><small>{experts.length ? `${experts.length} 位专家在线` : "本地模式"}</small></span>
+            <i />
           </div>
         </div>
       </header>

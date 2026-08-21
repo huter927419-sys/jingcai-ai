@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { fetchToday, fmtKick, fmtPrice, playRows, sortMatches, type MatchRow, type MatchSort } from "../api";
 import Layout from "../Layout";
 import { ScanShape } from "../Charts";
-import { IconBall, IconClock } from "../Icons";
+import { IconBall, IconClock, IconPulse, IconSpark } from "../Icons";
 
 export default function Today() {
   const [rows, setRows] = useState<ReturnType<typeof sortMatches>>([]);
@@ -29,22 +29,31 @@ export default function Today() {
   }, []);
 
   const live = rows.filter((m) => m.status === "临场").length;
+  const analyzed = rows.filter((m) => m.shape).length;
 
   return (
     <Layout>
-      <div className="page-head">
+      <div className="page-head today-head">
         <div>
-          <h1>今日工作台</h1>
+          <div className="eyebrow"><span /> LIVE MATCH INTELLIGENCE</div>
+          <h1>今日赛事研判</h1>
           <div className="sub">
-            <IconBall size={14} />
-            {rows.length} 场 · {live ? `${live} 场临场 · ` : ""}
-            {finished ? `${finished} 场完场已移到结果 · ` : ""}
-            先扫走势，再进场看票面和价值
+            基于赛程、市场赔率与多模型共识生成的实时决策视图
           </div>
         </div>
-        <div className="switch">
+        <div className="refresh-note"><i /><span>数据自动更新<small>每 20 秒同步一次</small></span></div>
+      </div>
+      <div className="overview-grid">
+        <div className="overview-item"><span>今日待赛</span><strong>{rows.length}</strong><small>场赛事</small><IconBall size={18} /></div>
+        <div className="overview-item"><span>临场监测</span><strong>{live}</strong><small>场进行中</small><IconPulse size={18} /></div>
+        <div className="overview-item"><span>模型就绪</span><strong>{analyzed}</strong><small>场已分析</small><IconSpark size={18} /></div>
+        <Link className="overview-item link" to="/results"><span>今日完场</span><strong>{finished}</strong><small>进入复盘中心 →</small></Link>
+      </div>
+      <div className="toolbar">
+        <div><b>赛事列表</b><span>{rows.length ? `共 ${rows.length} 场，点击赛事查看完整研判` : "等待今日赛程数据"}</span></div>
+        <div className="switch" aria-label="赛事排序">
           <button className={sort === "num" ? "btn" : "btn ghost"} onClick={() => setSort("num")}>
-            序号
+            竞彩序号
           </button>
           <button className={sort === "kick" ? "btn" : "btn ghost"} onClick={() => setSort("kick")}>
             开赛时间
@@ -60,7 +69,7 @@ export default function Today() {
               <Link to="/results">去结果页看专家评比</Link>
             </>
           ) : (
-            "还没有场次。"
+            <><IconPulse size={24} /><b>等待今日赛程</b><span>数据服务正在同步赛事与市场信息</span></>
           )}
         </div>
       ) : (
@@ -90,7 +99,7 @@ function ScanCard({ m }: { m: MatchRow }) {
             <span className="league">{m.leagueAbb || m.league}</span>
           </div>
           <div className="teams">
-            {m.home} vs {m.away}
+            <span>{m.home}</span><em>VS</em><span>{m.away}</span>
           </div>
           <div className="kick">
             <IconClock size={12} />
@@ -101,7 +110,7 @@ function ScanCard({ m }: { m: MatchRow }) {
       </div>
       <div className="scan-body">
         {shape ? (
-          <ScanShape home={shape.homeWin} draw={shape.draw} away={shape.awayWin} over={shape.over25} />
+          <div><div className="block-h">模型赛果概率</div><ScanShape home={shape.homeWin} draw={shape.draw} away={shape.awayWin} over={shape.over25} /></div>
         ) : (
           <div className="pred muted">走势还在分析。</div>
         )}
