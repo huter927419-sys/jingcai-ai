@@ -6,6 +6,8 @@ type ExpertChip = { role: string };
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [experts, setExperts] = useState<ExpertChip[]>([]);
+  const [expiresAt, setExpiresAt] = useState<string | null>(null);
+  const [remaining, setRemaining] = useState(0);
 
   useEffect(() => {
     void fetch("/api/health")
@@ -19,6 +21,31 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       })
       .catch(() => setExperts([]));
   }, []);
+
+  useEffect(() => {
+    let alive = true;
+    const sync = () => fetch("/api/access/status").then((r) => r.json()).then((j) => {
+      if (!alive) return;
+      setExpiresAt(j.authorized && j.expiresAt ? j.expiresAt : null);
+    }).catch(() => { if (alive) setExpiresAt(null); });
+    void sync();
+    const poll = window.setInterval(sync, 30_000);
+    return () => { alive = false; window.clearInterval(poll); };
+  }, []);
+
+  useEffect(() => {
+    const tick = () => setRemaining(expiresAt ? Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000)) : 0);
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [expiresAt]);
+
+  function formatRemaining(seconds: number): string {
+    const days = Math.floor(seconds / 86400); const hours = Math.floor((seconds % 86400) / 3600); const minutes = Math.floor((seconds % 3600) / 60);
+    if (days > 0) return `${days}天 ${String(hours).padStart(2, "0")}小时`;
+    if (hours > 0) return `${hours}小时 ${String(minutes).padStart(2, "0")}分`;
+    return `${minutes}分以内`;
+  }
 
   return (
     <>
@@ -47,6 +74,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <span><b>研判引擎</b><small>{experts.length ? `${experts.length} 个维度就绪` : "本地模式"}</small></span>
             <i />
           </div>
+          {remaining > 0 ? <div className={`access-remaining${remaining <= 86400 ? " soon" : ""}`} title={expiresAt ? `到期时间：${new Date(expiresAt).toLocaleString("zh-CN", { hour12: false })}` : ""}><span className="access-dot" />授权剩余 <b>{formatRemaining(remaining)}</b></div> : null}
         </div>
       </header>
       <div className="shell">

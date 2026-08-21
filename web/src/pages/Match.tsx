@@ -218,6 +218,7 @@ export default function Match() {
             ) : null}
             <AICompare
               sn={sn}
+              numStr={m.numStr}
               finished={!!m.finished}
               score={m.finished && m.homeGoals != null && m.awayGoals != null ? `${m.homeGoals}-${m.awayGoals}` : ""}
             />
@@ -248,10 +249,12 @@ function DetailOverview({ sn, best, now, previewReady }: { sn: Snapshot; best?: 
 
 function AICompare({
   sn,
+  numStr,
   finished,
   score,
 }: {
   sn: Snapshot;
+  numStr?: string;
   finished?: boolean;
   score?: string;
 }) {
@@ -307,6 +310,11 @@ function AICompare({
                   {t.hitOu != null ? (
                     <span className={`verdict ${t.hitOu ? "v-主推" : "v-放弃"}`}>{t.hitOu ? "大小中" : "大小未中"}</span>
                   ) : null}
+                </div>
+                <div className="expert-quickread">
+                  <div><span>解盘结构</span><b>{t.pattern || "盘口与概率交叉验证"}</b></div>
+                  <div><span>方向温度</span><b>{Math.max(t.homeWin, t.draw, t.awayWin).toFixed(0)}°</b><small>基于胜平负概率，仅作强弱参考</small></div>
+                  <div><span>竞彩参考</span><b>{numStr ? `${numStr} ` : ""}{t.pickHandicap ? `让${t.pickHandicap}` : t.pick1x2 ? t.pick1x2 : "待确认"}</b></div>
                 </div>
                 <div className="expert-analysis"><b>专业解盘</b><p>{t.plainTalk || "研判内容暂未生成。"}</p></div>
                 {t.buyTalk ? (

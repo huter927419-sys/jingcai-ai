@@ -8,7 +8,7 @@ export default function AccessGate({ children }: { children: ReactNode }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const load = () => fetch("/api/access/status").then(r => r.json()).then(setStatus).catch(() => setStatus({ authorized: false, reason: "missing" }));
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); const timer = window.setInterval(load, 10_000); return () => window.clearInterval(timer); }, []);
   if (!status) return <div className="access-loading">正在准备今日数据…</div>;
   if (status.authorized) return <>{children}</>;
   async function redeem(e: FormEvent) {
