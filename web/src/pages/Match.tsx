@@ -219,6 +219,7 @@ export default function Match() {
             <AICompare
               sn={sn}
               numStr={m.numStr}
+              odds={now}
               finished={!!m.finished}
               score={m.finished && m.homeGoals != null && m.awayGoals != null ? `${m.homeGoals}-${m.awayGoals}` : ""}
             />
@@ -250,11 +251,13 @@ function DetailOverview({ sn, best, now, previewReady }: { sn: Snapshot; best?: 
 function AICompare({
   sn,
   numStr,
+  odds,
   finished,
   score,
 }: {
   sn: Snapshot;
   numStr?: string;
+  odds?: OddsBoard | null;
   finished?: boolean;
   score?: string;
 }) {
@@ -271,7 +274,7 @@ function AICompare({
         <p className="pred muted">专业研判正在生成，将综合阵容、盘口与市场价值数据自动更新。</p>
       ) : (
         <>
-          <TradePlan sn={sn} cards={cards} />
+          <TradePlan sn={sn} cards={cards} odds={odds} />
           <GroupBars
             title="各维度胜平负判断"
             series={series}
@@ -301,7 +304,7 @@ function AICompare({
                 <div className="dir-chips">
                   {t.pattern ? <span className="dir-chip">格局 {t.pattern}</span> : null}
                   {t.pick1x2 ? <span className="dir-chip">胜平负 {t.pick1x2}</span> : null}
-                  {t.pickHandicap ? <span className="dir-chip">让球 {t.pickHandicap}</span> : null}
+                  {t.pickHandicap ? <span className="dir-chip">让球 {t.pickHandicap}{handicapSp(t.pickHandicap, odds)}</span> : null}
                   {t.pickOu ? <span className="dir-chip">大小 {t.pickOu}</span> : null}
                   {t.scores?.length ? <span className="dir-chip">比分 {t.scores.join(" / ")}</span> : null}
                   {t.hit1x2 != null ? (
@@ -314,9 +317,9 @@ function AICompare({
                 <div className="expert-quickread">
                   <div><span>解盘结构</span><b>{t.pattern || "盘口与概率交叉验证"}</b></div>
                   <div><span>方向温度</span><b>{Math.max(t.homeWin, t.draw, t.awayWin).toFixed(0)}°</b><small>基于胜平负概率，仅作强弱参考</small></div>
-                  <div><span>竞彩参考</span><b>{numStr ? `${numStr} ` : ""}{t.pickHandicap ? `让${t.pickHandicap}` : t.pick1x2 ? t.pick1x2 : "待确认"}</b></div>
+                  <div><span>竞彩参考</span><b>{numStr ? `${numStr} ` : ""}{t.pickHandicap ? `${t.pickHandicap}${handicapSp(t.pickHandicap, odds)}` : t.pick1x2 ? t.pick1x2 : "待确认"}</b></div>
                 </div>
-                <div className="expert-analysis"><b>专业解盘</b><p>{t.plainTalk || "研判内容暂未生成。"}</p></div>
+                <div className="expert-analysis"><b>专业解盘</b><p>{t.plainTalk || "研判内容暂未生成。"}</p>{ticketInterpretation(t.pickHandicap, odds)}</div>
                 {t.buyTalk ? (
                   <div className="buy-talk">
                     <b>参考买入</b>
@@ -334,7 +337,7 @@ function AICompare({
   );
 }
 
-function TradePlan({ sn, cards }: { sn: Snapshot; cards: ModelTake[] }) {
+function TradePlan({ sn, cards, odds }: { sn: Snapshot; cards: ModelTake[]; odds?: OddsBoard | null }) {
   const active = cards.filter((t) => t.verdict !== "放弃");
   const pool = active.length ? active : cards;
   const pick = majority(pool.map((t) => t.pick1x2).filter(Boolean) as string[]);
@@ -350,7 +353,7 @@ function TradePlan({ sn, cards }: { sn: Snapshot; cards: ModelTake[] }) {
       <div className="trade-plan-grid">
         <div><span>比赛格局</span><strong>{pattern}</strong></div>
         <div className="primary"><span>主方向</span><strong>胜平负 {pick || "待确认"}</strong></div>
-        <div><span>让球方向</span><strong>{handicap || sn.handicap?.pick || "待确认"}</strong></div>
+        <div><span>让球方向</span><strong>{handicap ? `${handicap}${handicapSp(handicap, odds)}` : sn.handicap?.pick ? `${sn.handicap.pick}${handicapSp(sn.handicap.pick, odds)}` : "待确认"}</strong></div>
         <div><span>大小球</span><strong>{ou ? `${ou} 2.5` : "待确认"}</strong></div>
         <div><span>情景比分</span><strong>{scoreText}</strong></div>
       </div>
@@ -405,6 +408,11 @@ function TicketAdvice({ sn, odds }: { sn: Snapshot; odds?: OddsBoard | null }) {
   ].sort((a, b) => b.p - a.p);
   const hhadReady = Boolean(odds?.hhadLine && odds?.hhad?.H > 1 && hhad[0].p > 0);
   const handicap = fmtSigned(odds?.hhadLine);
+  const handicapSpRows = [
+    { label: "让胜", price: odds?.hhad?.H },
+    { label: "让平", price: odds?.hhad?.D },
+    { label: "让负", price: odds?.hhad?.A },
+  ];
   const goalPicks = totalGoalPicks(sn.grid ?? []);
   const scorePicks = (sn.topScores ?? []).slice(0, 2);
 
@@ -423,7 +431,7 @@ function TicketAdvice({ sn, odds }: { sn: Snapshot; odds?: OddsBoard | null }) {
         <div className="ticket-pick">
           <span>让球胜平负 {handicap || ""}</span>
           <strong>{hhadReady ? `主选 ${hhad[0].label}${hhad[0].p - hhad[1].p < 8 ? `，备选 ${hhad[1].label}` : ""}` : "票面未齐，暂不建议介入"}</strong>
-          <small>{hhadReady ? "让球数按主队口径，结算以实际出票票面为准" : "等待官方让球数与 SP 完整更新"}</small>
+          <small>{hhadReady ? <>SP {handicapSpRows.map((x) => `${x.label} ${fmtSp(x.price)}`).join(" · ")} · 让球数按主队口径</> : "等待官方让球数与 SP 完整更新"}</small>
         </div>
         <div className="ticket-pick">
           <span>总进球</span>
@@ -489,6 +497,26 @@ function roleTitle(role?: string, fallback?: string): string {
 
 function normalizeAdvice(text: string): string {
   return text.replace(/^参考买入[：:]?\s*/, "").replace(/^竞彩/, "");
+}
+
+function fmtSp(value?: number | null): string {
+  return value != null && value > 1 ? value.toFixed(2) : "待开售";
+}
+
+function handicapSp(pick?: string, odds?: OddsBoard | null): string {
+  const raw = (pick || "").replace(/^主选\s*/, "").trim();
+  if (!raw || raw === "放弃") return "";
+  const key = raw.startsWith("让") ? raw : `让${raw}`;
+  const price = key === "让胜" ? odds?.hhad?.H : key === "让平" ? odds?.hhad?.D : key === "让负" ? odds?.hhad?.A : undefined;
+  return ` · SP ${fmtSp(price)}`;
+}
+
+function ticketInterpretation(pick?: string, odds?: OddsBoard | null) {
+  const line = fmtSigned(odds?.hhadLine);
+  const ready = Boolean(line && Number(odds?.hhad?.H) > 1 && Number(odds?.hhad?.D) > 1 && Number(odds?.hhad?.A) > 1);
+  if (!ready) return <p className="ticket-interpretation muted"><b>让球票面：</b>官方让球数或 SP 尚未完整开售，当前不补充让胜、让平、让负结论。</p>;
+  const direction = pick && pick !== "放弃" ? (pick.startsWith("让") ? pick : `让${pick}`) : "暂不介入";
+  return <p className="ticket-interpretation"><b>让球票面：</b>主队 {line}，当前参考 {direction}{direction !== "暂不介入" ? handicapSp(direction, odds) : ""}；完整 SP 为让胜 {fmtSp(odds?.hhad?.H)}、让平 {fmtSp(odds?.hhad?.D)}、让负 {fmtSp(odds?.hhad?.A)}。SP 反映官方票面定价，仅用于选择玩法，不能单独视为赛果依据。</p>;
 }
 
 function RiskNotice({ children, tone, strong }: { children: ReactNode; tone?: "data"; strong?: boolean }) {

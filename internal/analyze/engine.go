@@ -304,7 +304,7 @@ func buildRolePrompt(role experts.Role, m sporttery.Match, kind store.SnapshotKi
 	if q != nil && q.Betfair != nil {
 		fmt.Fprintf(&b, "必发成交 主%.0f 平%.0f 客%.0f。%s\n", q.Betfair.HomeVol, q.Betfair.DrawVol, q.Betfair.AwayVol, q.Betfair.Note)
 	}
-	b.WriteString("严格围绕当前角色的专业职责展开，不要平均复述所有数据。文案采用专业解盘口吻，按以下顺序组织：1）初盘到后市的盘口/水位变化及机构态度；2）阵型、首发/伤停或比赛节奏对位；3）胜平负与让球的格局方向；4）竞彩参考、两个情景比分和方向温度（温度只是概率强弱表达，不是命中率）。必须引用至少两项具体证据，并说明证据如何支持或削弱结论。参考买入必须写明临场失效条件和风险，不能承诺结果或收益。资料没有提供的内容必须写未确认，严禁补造。只根据赛前资料预测，不要假设已经踢完。\n")
+	b.WriteString("严格围绕当前角色的专业职责展开，不要平均复述所有数据。文案采用专业解盘口吻，按以下顺序组织：1）初盘到后市的盘口/水位变化及机构态度；2）阵型、首发/伤停或比赛节奏对位；3）胜平负与让球的格局方向；4）竞彩参考、两个情景比分和方向温度（温度只是概率强弱表达，不是命中率）。让球建议必须明确写成让胜、让平或让负，并在 plain_talk 和 buy_talk 中引用该方向对应的官方 SP；同时说明 SP 仅为官方票面定价，不能单独作为赛果依据。必须引用至少两项具体证据，并说明证据如何支持或削弱结论。参考买入必须写明临场失效条件和风险，不能承诺结果或收益。资料没有提供的内容必须写未确认，严禁补造。只根据赛前资料预测，不要假设已经踢完。\n")
 	return b.String()
 }
 
@@ -315,7 +315,7 @@ func buildSoftRolePrompt(role experts.Role, m sporttery.Match, kind store.Snapsh
 	b.WriteString(lineupLine(prev))
 	b.WriteString(marketLine(q))
 	b.WriteString(valueLine(seed, q))
-	b.WriteString("伤停名单未提供时必须明确写未确认。请输出 JSON。plain_talk 按‘盘口变化与机构态度—阵型/首发/伤停对位—胜平负与让球格局—大小球节奏—结论与失效条件’组织，使用升盘、退盘、降水、阻上、盘赔背离、肋部、压迫、转换等专业解盘术语；必须明确胜平负、让球、大小球和两个情景比分。比分仅用于描述比赛路径，不得写成确定结果。buy_talk 必须写参考买入和风险提示。")
+	b.WriteString("伤停名单未提供时必须明确写未确认。请输出 JSON。plain_talk 按‘盘口变化与机构态度—阵型/首发/伤停对位—胜平负与让球格局—大小球节奏—结论与失效条件’组织，使用升盘、退盘、降水、阻上、盘赔背离、肋部、压迫、转换等专业解盘术语；必须明确胜平负、让胜/让平/让负、对应官方 SP、大小球和两个情景比分，并说明 SP 仅为票面定价。比分仅用于描述比赛路径，不得写成确定结果。buy_talk 必须带让球方向及对应 SP，并写参考买入和风险提示。")
 	return b.String()
 }
 
@@ -361,7 +361,7 @@ func matchLine(m sporttery.Match, kind store.SnapshotKind, seed lambdaest.Seed) 
 		fmt.Fprintf(&b, "竞彩大小看 2.5。\n")
 	}
 	if m.HHADLine != "" {
-		fmt.Fprintf(&b, "竞彩让球 %s。\n", m.HHADLine)
+		fmt.Fprintf(&b, "竞彩让球 %s，官方 SP：让胜 %.2f / 让平 %.2f / 让负 %.2f。解读必须明确推荐让胜、让平或让负，并引用对应 SP；SP 只作票面参考，不参与价值判断。\n", m.HHADLine, m.HHAD.H, m.HHAD.D, m.HHAD.A)
 	}
 	return b.String()
 }
