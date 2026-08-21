@@ -253,6 +253,47 @@ export async function fetchToday(): Promise<{ matches: MatchRow[]; finished: num
   return { matches, finished: Number(j.finished ?? 0) };
 }
 
+export type SFCMatch = {
+  no: number;
+  league: string;
+  kickoff: string;
+  home: string;
+  away: string;
+  homeWin: number;
+  draw: number;
+  awayWin: number;
+  marketHome?: number;
+  marketDraw?: number;
+  marketAway?: number;
+  pick: "胜" | "平" | "负" | string;
+  source: "研判" | "均赔" | string;
+  matchId?: number;
+  numStr?: string;
+  talk?: string;
+  market?: MarketQuote;
+  handicap?: {
+    line?: string;
+    lineText?: string;
+    pick?: string;
+    talk?: string;
+    home?: number;
+    away?: number;
+  };
+  eval?: EvalSide[];
+};
+
+export async function fetchSFC(): Promise<{ issue: string; matches: SFCMatch[]; analyzed: number; total: number }> {
+  const r = await fetch("/api/sfc");
+  if (!r.ok) throw new Error("sfc failed");
+  const j = await r.json();
+  return {
+    issue: String(j.issue ?? ""),
+    matches: (j.matches ?? []) as SFCMatch[],
+    analyzed: Number(j.analyzed ?? 0),
+    total: Number(j.total ?? 0),
+  };
+}
+
 export async function fetchMatch(id: string, kind?: string): Promise<MatchDetail> {
   const q = kind ? `?kind=${kind}` : "";
   const r = await fetch(`/api/matches/${id}${q}`);

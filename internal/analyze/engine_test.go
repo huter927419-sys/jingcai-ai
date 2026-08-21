@@ -33,3 +33,14 @@ func TestRunSkipsExistingSnapshot(t *testing.T) {
 		t.Fatal("expected sqlite hit, no second write")
 	}
 }
+
+func TestProbsFrom1X2(t *testing.T) {
+	r := ProbsFrom1X2(1.87, 3.26, 3.47)
+	sum := r.HomeWin + r.Draw + r.AwayWin
+	if sum < 99 || sum > 101 {
+		t.Fatalf("sum %.2f %+v", sum, r)
+	}
+	if r.HomeWin <= r.Draw || r.HomeWin <= r.AwayWin {
+		t.Fatalf("home should lead %+v", r)
+	}
+}

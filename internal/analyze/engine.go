@@ -458,6 +458,11 @@ func abs(v float64) float64 {
 	return v
 }
 
+func ProbsFrom1X2(h, d, a float64) poisson.Result {
+	seed := lambdaest.FromOdds(h, d, a)
+	return poisson.Evaluate(seed.Home, seed.Away)
+}
+
 func clip(s string, n int) string {
 	rs := []rune(strings.TrimSpace(s))
 	if len(rs) <= n {

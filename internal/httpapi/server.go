@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"jingcai-ai/internal/analyze"
 	"jingcai-ai/internal/eval"
 	"jingcai-ai/internal/experts"
 	"jingcai-ai/internal/market"
@@ -23,6 +24,7 @@ type Server struct {
 	Store         *store.Store
 	Location      *time.Location
 	Refresh       func() error
+	SFCRefresh    func() error
 	WebDir        string
 	Models        []string
 	AdminUsername string
@@ -46,6 +48,7 @@ func (s *Server) Handler() http.Handler {
 	protected := http.NewServeMux()
 	protected.HandleFunc("GET /api/today", s.today)
 	protected.HandleFunc("GET /api/week", s.week)
+	protected.HandleFunc("GET /api/sfc", s.sfc)
 	protected.HandleFunc("GET /api/experts", s.experts)
 	protected.HandleFunc("GET /api/matches/{id}", s.match)
 	protected.HandleFunc("POST /api/admin/refresh", s.refresh)
@@ -214,6 +217,106 @@ func (s *Server) adminTerminate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": true})
+}
+
+func (s *Server) sfc(w http.ResponseWriter, r *http.Request) {
+	board, err := s.Store.LatestSFC()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	stale := board == nil || time.Since(board.FetchedAt) > 15*time.Minute
+	if stale && s.SFCRefresh != nil {
+		if e := s.SFCRefresh(); e != nil {
+			log.Printf("sfc refresh: %v", e)
+		} else if next, e2 := s.Store.LatestSFC(); e2 == nil && next != nil {
+			board = next
+		}
+	}
+	if board == nil {
+		writeJSON(w, 200, map[string]any{"issue": "", "matches": []any{}, "note": "本期对阵尚未同步"})
+		return
+	}
+	now := time.Now()
+	if s.Location != nil {
+		now = now.In(s.Location)
+	}
+	type item struct {
+		No          int     `json:"no"`
+		League      string  `json:"league"`
+		Kickoff     string  `json:"kickoff"`
+		Home        string  `json:"home"`
+		Away        string  `json:"away"`
+		Asian       string  `json:"asian,omitempty"`
+		HomeWin     float64 `json:"homeWin"`
+		Draw        float64 `json:"draw"`
+		AwayWin     float64 `json:"awayWin"`
+		MarketHome  float64 `json:"marketHome"`
+		MarketDraw  float64 `json:"marketDraw"`
+		MarketAway  float64 `json:"marketAway"`
+		Pick        string  `json:"pick"`
+		Source      string  `json:"source"`
+		MatchID     *int64  `json:"matchId,omitempty"`
+		NumStr      string  `json:"numStr,omitempty"`
+		JingcaiHome string  `json:"jingcaiHome,omitempty"`
+		JingcaiAway string  `json:"jingcaiAway,omitempty"`
+		Talk        string  `json:"talk,omitempty"`
+		Market      any     `json:"market,omitempty"`
+		Handicap    any     `json:"handicap,omitempty"`
+		Eval        any     `json:"eval,omitempty"`
+	}
+	out := make([]item, 0, len(board.Matches))
+	analyzed := 0
+	for _, row := range board.Matches {
+		it := item{
+			No: row.No, League: row.League, Kickoff: row.Kickoff, Home: row.Home, Away: row.Away, Asian: row.Asian,
+			HomeWin: row.MarketHome, Draw: row.MarketDraw, AwayWin: row.MarketAway, Source: "均赔",
+			MarketHome: row.MarketHome, MarketDraw: row.MarketDraw, MarketAway: row.MarketAway,
+		}
+		if m := s.Store.MatchSFC(row, now); m != nil {
+			id := m.ID
+			it.MatchID = &id
+			it.NumStr = m.NumStr
+			it.JingcaiHome, it.JingcaiAway = m.Home, m.Away
+			if sn, e := s.Store.PreferredSnapshot(m.ID); e == nil && sn != nil && (sn.Result.HomeWin+sn.Result.Draw+sn.Result.AwayWin) > 1 {
+				it.HomeWin, it.Draw, it.AwayWin = sn.Result.HomeWin, sn.Result.Draw, sn.Result.AwayWin
+				it.Source = "研判"
+				analyzed++
+			}
+		}
+		if it.Source != "研判" && row.AnalyzedHome+row.AnalyzedDraw+row.AnalyzedAway > 1 {
+			it.HomeWin, it.Draw, it.AwayWin = row.AnalyzedHome, row.AnalyzedDraw, row.AnalyzedAway
+			it.Source = "研判"
+			analyzed++
+		}
+		it.Pick = sfcPick(it.HomeWin, it.Draw, it.AwayWin)
+		if it.MatchID == nil {
+			talk, hc, sides := analyze.PackMarket(row.Home, row.Away, it.HomeWin, it.Draw, it.AwayWin, row.Quote)
+			it.Talk, it.Handicap, it.Eval = talk, hc, sides
+			if row.Quote != nil {
+				it.Market = row.Quote
+			}
+		}
+		out = append(out, it)
+	}
+	writeJSON(w, 200, map[string]any{
+		"issue":     board.Issue,
+		"fetchedAt": board.FetchedAt,
+		"matches":   out,
+		"analyzed":  analyzed,
+		"total":     len(out),
+	})
+}
+
+func sfcPick(h, d, a float64) string {
+	switch {
+	case h >= d && h >= a:
+		return "胜"
+	case a >= d && a >= h:
+		return "负"
+	default:
+		return "平"
+	}
 }
 
 func (s *Server) week(w http.ResponseWriter, r *http.Request) {

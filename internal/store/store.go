@@ -204,6 +204,11 @@ CREATE TABLE IF NOT EXISTS admin_sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_access_codes_duration ON access_codes(duration_days);
 CREATE INDEX IF NOT EXISTS idx_access_sessions_code ON access_sessions(code_id);
+CREATE TABLE IF NOT EXISTS sfc_issues (
+  issue TEXT PRIMARY KEY,
+  fetched_at TEXT NOT NULL,
+  matches_json TEXT NOT NULL
+);
 `)
 	if err != nil {
 		return err

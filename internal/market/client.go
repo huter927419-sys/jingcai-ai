@@ -73,6 +73,49 @@ func (c *Client) Fetch(matchID, fid int64) (*Quote, error) {
 	return q, nil
 }
 
+func (c *Client) FetchEU(fid int64) (*Trio, error) {
+	if fid <= 0 {
+		return nil, fmt.Errorf("500.com: missing fid")
+	}
+	html, err := c.get(fmt.Sprintf(ouzhiURL, fid), listURL)
+	if err != nil {
+		return nil, err
+	}
+	t := ParseEU(html)
+	if t == nil || t.H <= 1 || t.D <= 1 || t.A <= 1 {
+		return nil, fmt.Errorf("500.com: empty eu fid=%d", fid)
+	}
+	return t, nil
+}
+
+func (c *Client) FetchMarkets(fid int64) (*Quote, error) {
+	if fid <= 0 {
+		return nil, fmt.Errorf("500.com: missing fid")
+	}
+	q := &Quote{Fid: fid, FetchedAt: time.Now(), Company: "Bet365"}
+	if html, err := c.get(fmt.Sprintf(ouzhiURL, fid), listURL); err == nil {
+		q.EU = ParseEU(html)
+	}
+	if html, err := c.get(fmt.Sprintf(yazhiURL, fid), listURL); err == nil {
+		q.Asian = ParseAsian(html)
+	}
+	if html, err := c.get(fmt.Sprintf(daxiaoURL, fid), listURL); err == nil {
+		q.OU = ParseOU(html)
+	}
+	if q.EU == nil && q.Asian == nil && q.OU == nil {
+		return nil, fmt.Errorf("500.com: empty markets fid=%d", fid)
+	}
+	if q.EU != nil && q.EU.Company != "" {
+		q.Company = q.EU.Company
+	} else if q.Asian != nil && q.Asian.Company != "" {
+		q.Company = q.Asian.Company
+	} else if q.OU != nil && q.OU.Company != "" {
+		q.Company = q.OU.Company
+	}
+	q.FillImplied()
+	return q, nil
+}
+
 func (c *Client) FetchPreview(matchID, fid int64) (*Preview, error) {
 	if fid <= 0 {
 		return nil, fmt.Errorf("500.com: missing fid")

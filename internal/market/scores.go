@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"time"
 )
 
 var reFT = regexp.MustCompile(`detail\.php\?fid=(\d+)[^>]*class="clt1"[^>]*>\s*(\d+)\s*</a>\s*<span>-</span>\s*<a[^>]*class="clt3"[^>]*>\s*(\d+)`)
@@ -23,7 +24,8 @@ func ParseFTScores(html string) map[int64][2]int {
 
 func (c *Client) FetchFTScores() (map[int64][2]int, error) {
 	out := map[int64][2]int{}
-	for _, u := range []string{"https://live.500.com/wanchang.php", "https://live.500.com/2h1.php"} {
+	// 先即时页，再用完场页覆盖。开场后不足 100 分钟的比分由调用方丢弃。
+	for _, u := range []string{"https://live.500.com/2h1.php", "https://live.500.com/wanchang.php"} {
 		html, err := c.get(u, "https://live.500.com/")
 		if err != nil {
 			continue
@@ -36,4 +38,11 @@ func (c *Client) FetchFTScores() (map[int64][2]int, error) {
 		return nil, fmt.Errorf("500.com: no finished scores")
 	}
 	return out, nil
+}
+
+func ReadyForFullTime(kickoff, now time.Time) bool {
+	if kickoff.IsZero() {
+		return false
+	}
+	return !now.Before(kickoff.Add(100 * time.Minute))
 }

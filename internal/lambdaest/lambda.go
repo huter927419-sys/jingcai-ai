@@ -54,6 +54,10 @@ func FromMatch(m sporttery.Match) Seed {
 	return Seed{Home: lh, Away: la, ImpliedH: ih, ImpliedD: id, ImpliedA: ia, ImpliedO25: io}
 }
 
+func FromOdds(h, d, a float64) Seed {
+	return FromMatch(sporttery.Match{HasHAD: true, HAD: sporttery.Odds{H: h, D: d, A: a}})
+}
+
 func goalDiffFromLine(line string) (float64, bool) {
 	f, err := strconv.ParseFloat(strings.TrimSpace(line), 64)
 	if err != nil {

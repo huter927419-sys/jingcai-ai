@@ -57,6 +57,9 @@ func (s *Scheduler) Start() error {
 		if err := s.BackfillNew(); err != nil {
 			log.Printf("backfill: %v", err)
 		}
+		if err := s.RefreshSFC(); err != nil {
+			log.Printf("sfc: %v", err)
+		}
 	}); err != nil {
 		return err
 	}
@@ -76,6 +79,9 @@ func (s *Scheduler) Start() error {
 		}
 		if err := s.BackfillExperts(); err != nil {
 			log.Printf("experts: %v", err)
+		}
+		if err := s.RefreshSFC(); err != nil {
+			log.Printf("sfc: %v", err)
 		}
 	}()
 	return nil
@@ -101,6 +107,78 @@ func (s *Scheduler) BackfillNew() error {
 
 func (s *Scheduler) RefreshNow() error {
 	return s.ingest(store.KindOpen, true)
+}
+
+func (s *Scheduler) RefreshSFC() error {
+	if s.Market == nil {
+		return nil
+	}
+	board, err := s.Market.FetchSFC()
+	if err != nil {
+		return err
+	}
+	s.fillSFCAnalysis(board)
+	if err := s.Store.SaveSFC(board); err != nil {
+		return err
+	}
+	n := 0
+	for _, m := range board.Matches {
+		if m.AnalyzedHome+m.AnalyzedDraw+m.AnalyzedAway > 1 {
+			n++
+		}
+	}
+	log.Printf("sfc issue %s matches %d analyzed %d", board.Issue, len(board.Matches), n)
+	return nil
+}
+
+func (s *Scheduler) fillSFCAnalysis(board *market.SFCBoard) {
+	if board == nil {
+		return
+	}
+	prev, _ := s.Store.LatestSFC()
+	prevByNo := map[int]market.SFCMatch{}
+	if prev != nil && prev.Issue == board.Issue {
+		for _, m := range prev.Matches {
+			prevByNo[m.No] = m
+		}
+	}
+	now := time.Now()
+	if s.Location != nil {
+		now = now.In(s.Location)
+	}
+	for i := range board.Matches {
+		row := &board.Matches[i]
+		if p, ok := prevByNo[row.No]; ok {
+			row.AnalyzedHome, row.AnalyzedDraw, row.AnalyzedAway = p.AnalyzedHome, p.AnalyzedDraw, p.AnalyzedAway
+			if row.EUHome <= 1 {
+				row.EUHome, row.EUDraw, row.EUAway = p.EUHome, p.EUDraw, p.EUAway
+			}
+			if row.Quote == nil {
+				row.Quote = p.Quote
+			}
+		}
+		if m := s.Store.MatchSFC(*row, now); m != nil {
+			if sn, err := s.Store.PreferredSnapshot(m.ID); err == nil && sn != nil && sn.Result.HomeWin+sn.Result.Draw+sn.Result.AwayWin > 1 {
+				continue
+			}
+		}
+		needMarkets := row.Fid > 0 && (row.Quote == nil || (row.Quote.Asian == nil && row.Quote.EU == nil))
+		if needMarkets {
+			if q, err := s.Market.FetchMarkets(row.Fid); err == nil && q != nil {
+				analyze.ApplyQuote(row, q)
+			} else if err != nil {
+				log.Printf("sfc markets %d: %v", row.No, err)
+			}
+			time.Sleep(250 * time.Millisecond)
+		} else if row.Quote != nil {
+			analyze.ApplyQuote(row, row.Quote)
+		}
+		h, d, a := row.EUHome, row.EUDraw, row.EUAway
+		if row.AnalyzedHome+row.AnalyzedDraw+row.AnalyzedAway <= 1 && h > 1 && d > 1 && a > 1 {
+			res := analyze.ProbsFrom1X2(h, d, a)
+			row.AnalyzedHome, row.AnalyzedDraw, row.AnalyzedAway = res.HomeWin, res.Draw, res.AwayWin
+		}
+	}
 }
 
 func (s *Scheduler) ingest(kind store.SnapshotKind, onlyMissing bool) error {
@@ -150,13 +228,23 @@ func (s *Scheduler) PollScores() error {
 		return err
 	}
 	n := 0
+	now := time.Now()
+	if s.Location != nil {
+		now = now.In(s.Location)
+	}
 	for fid, sc := range scores {
 		id := fids[fid]
 		if id == 0 {
 			continue
 		}
 		m, err := s.Store.GetMatch(id)
-		if err != nil || m == nil || m.Finished {
+		if err != nil || m == nil {
+			continue
+		}
+		if !market.ReadyForFullTime(m.Kickoff, now) {
+			continue
+		}
+		if m.Finished && m.HomeGoals != nil && m.AwayGoals != nil && *m.HomeGoals == sc[0] && *m.AwayGoals == sc[1] {
 			continue
 		}
 		if err := s.Store.SaveFT(id, sc[0], sc[1]); err != nil {
@@ -164,7 +252,11 @@ func (s *Scheduler) PollScores() error {
 			continue
 		}
 		n++
-		log.Printf("完场 %s %d-%d", m.NumStr, sc[0], sc[1])
+		if m.Finished {
+			log.Printf("比分更新 %s %d-%d -> %d-%d", m.NumStr, *m.HomeGoals, *m.AwayGoals, sc[0], sc[1])
+		} else {
+			log.Printf("完场 %s %d-%d", m.NumStr, sc[0], sc[1])
+		}
 	}
 	if n > 0 {
 		log.Printf("scores saved %d", n)

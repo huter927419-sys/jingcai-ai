@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { IconBall, IconChart, IconGrid, IconLogo, IconPulse } from "./Icons";
+import { IconBall, IconChart, IconGrid, IconList, IconLogo, IconPulse } from "./Icons";
 
 type ExpertChip = { role: string };
 
@@ -64,6 +64,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <NavLink to="/" end className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}>
               今日赛事
             </NavLink>
+            <NavLink to="/sfc" className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}>
+              胜负彩
+            </NavLink>
             <NavLink to="/results" className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}>
               复盘中心
             </NavLink>
@@ -90,6 +93,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
           <IconBall size={19} />
           <span>今日</span>
+        </NavLink>
+        <NavLink to="/sfc" className={({ isActive }) => (isActive ? "active" : "")}>
+          <IconList size={19} />
+          <span>胜负彩</span>
         </NavLink>
         <NavLink to="/results" className={({ isActive }) => (isActive ? "active" : "")}>
           <IconChart size={19} />

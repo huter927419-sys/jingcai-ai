@@ -80,6 +80,7 @@ func main() {
 		Store:         st,
 		Location:      cfg.Location,
 		Refresh:       sched.RefreshNow,
+		SFCRefresh:    sched.RefreshSFC,
 		WebDir:        webDir,
 		Models:        names,
 		AdminUsername: cfg.AdminUsername, AdminPassword: cfg.AdminPassword, AdminPath: cfg.AdminPath, CookieSecure: cfg.CookieSecure,
