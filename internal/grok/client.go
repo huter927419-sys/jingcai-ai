@@ -94,9 +94,13 @@ func (c *Client) Analyze(prompt string) (out Output, err error) {
 		}
 		c.Audit.Log(event)
 	}()
+	maxTokens := 800
+	if strings.Contains(strings.ToLower(c.Model), "claude") {
+		maxTokens = 1600
+	}
 	body := map[string]any{
 		"model":      c.Model,
-		"max_tokens": 800,
+		"max_tokens": maxTokens,
 		"messages": []map[string]string{
 			{"role": "system", "content": c.systemText()},
 			{"role": "user", "content": prompt},

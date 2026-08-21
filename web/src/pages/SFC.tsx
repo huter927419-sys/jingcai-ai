@@ -42,10 +42,10 @@ export default function SFC() {
     <Layout>
       <div className="page-head today-head">
         <div>
-          <div className="eyebrow"><span /> TRADITIONAL 14</div>
+          <div className="eyebrow"><span /> LAB · NOT IN PRODUCT</div>
           <h1>胜负彩 · 14 场</h1>
           <div className="sub">
-            当期 14 场胜、平、负。点进任一场看价值和专家研判；对得上竞彩的进完整票面，其余只看市场盘口，不会出现在今日赛事。
+            这是独立试验页，不在产品导航里。当期 14 场胜、平、负；对得上竞彩的可进完整票面，其余只看市场盘口。
           </div>
         </div>
         <div className="refresh-note"><i /><span>数据自动更新<small>每 30 秒同步一次</small></span></div>
@@ -91,7 +91,7 @@ function SFCRow({ m }: { m: SFCMatch }) {
       <span className="sfc-more">详情</span>
     </>
   );
-  const to = m.matchId ? `/matches/${m.matchId}` : `/sfc/${m.no}`;
+  const to = m.matchId ? `/matches/${m.matchId}` : `/lab/sfc/${m.no}`;
   return <Link className="sfc-card linked" to={to}>{inner}</Link>;
 }
 

@@ -36,7 +36,7 @@ export default function SFCDetail() {
   if (err) {
     return (
       <Layout>
-        <Link className="back" to="/sfc"><IconBack size={14} /> 返回胜负彩</Link>
+        <Link className="back" to="/lab/sfc"><IconBack size={14} /> 返回胜负彩</Link>
         <div className="err">{err}</div>
       </Layout>
     );
@@ -44,7 +44,7 @@ export default function SFCDetail() {
   if (!row) {
     return (
       <Layout>
-        <Link className="back" to="/sfc"><IconBack size={14} /> 返回胜负彩</Link>
+        <Link className="back" to="/lab/sfc"><IconBack size={14} /> 返回胜负彩</Link>
         <div className="pending">{no ? "没有这场对阵" : "读取中…"}</div>
       </Layout>
     );
@@ -57,7 +57,7 @@ export default function SFCDetail() {
 
   return (
     <Layout>
-      <Link className="back" to="/sfc"><IconBack size={14} /> 返回胜负彩</Link>
+      <Link className="back" to="/lab/sfc"><IconBack size={14} /> 返回胜负彩</Link>
       <div className="page-head">
         <div>
           <div className="eyebrow"><span /> SFC {issue || "—"} · {String(row.no).padStart(2, "0")}</div>

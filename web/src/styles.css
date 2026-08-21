@@ -1238,7 +1238,7 @@ h1 { font-size: 27px; font-weight: 720; color: var(--ink); margin: 0; letter-spa
   .brand small, .system-state { display: none; }
   .brand { font-size: 12px; }
   .primary-nav { display: none; }
-  .mobile-nav { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(4, 1fr); min-height: 58px; padding-bottom: env(safe-area-inset-bottom); background: rgba(255,255,255,.97); border-top: 1px solid var(--line); box-shadow: 0 -8px 24px rgba(23,33,43,.08); backdrop-filter: blur(16px); }
+  .mobile-nav { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(3, 1fr); min-height: 58px; padding-bottom: env(safe-area-inset-bottom); background: rgba(255,255,255,.97); border-top: 1px solid var(--line); box-shadow: 0 -8px 24px rgba(23,33,43,.08); backdrop-filter: blur(16px); }
   .mobile-nav a { min-height: 58px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--muted); font-size: 10px; font-weight: 650; }
   .mobile-nav a.active { color: var(--accent); background: var(--accent-soft); }
   .shell { padding: 20px 14px calc(82px + env(safe-area-inset-bottom)); }

@@ -77,7 +77,7 @@ export default function Match() {
 
   const m = data.match;
   const sfc = m.origin === "sfc";
-  const backTo = sfc ? "/sfc" : m.finished ? "/results" : "/";
+  const backTo = sfc ? "/lab/sfc" : m.finished ? "/results" : "/";
   const backLabel = sfc ? "返回胜负彩" : m.finished ? "返回结果" : "返回今日";
   const sn = data.snapshot;
   const hasBoth = data.available.includes("open") && data.available.includes("close");
