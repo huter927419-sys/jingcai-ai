@@ -149,6 +149,7 @@ export default function Match() {
           </div>
 
           <DetailOverview sn={sn} best={best} now={now} previewReady={Boolean(data.preview?.home || data.preview?.away)} />
+          <EvidencePanel sn={sn} data={data} now={now} market={market} />
           <nav className="detail-index" aria-label="详情分析导航">
             <a href="#trend"><IconChart size={16} /><span><b>01 走势</b><small>概率 · 比分 · 阵容</small></span></a>
             <a href="#ticket"><IconGrid size={16} /><span><b>02 票面</b><small>赔率 · 让球 · 变化</small></span></a>
@@ -246,6 +247,27 @@ function DetailOverview({ sn, best, now, previewReady }: { sn: Snapshot; best?: 
       <div><IconGrid size={17} /><span>数据覆盖<strong>{dataCount}/3</strong><small>票面 · 阵容 · 研判</small></span></div>
     </section>
   );
+}
+
+function EvidencePanel({ sn, data, now, market }: { sn: Snapshot; data: MatchDetail; now?: OddsBoard | null; market?: MarketQuote | null }) {
+  const hasOdds = Boolean(now?.had?.H && now.had.H > 1);
+  const hasLineup = Boolean(data.preview?.home || data.preview?.away);
+  const hasMarket = Boolean(market?.eu || market?.asian || market?.ou || market?.betfair);
+  const hasClose = Boolean(data.oddsOpen && data.oddsClose);
+  const covered = [hasOdds, hasLineup, hasMarket, (sn.takes?.length ?? 0) > 0].filter(Boolean).length;
+  const picks = (sn.takes ?? []).map((x) => x.pick1x2).filter(Boolean);
+  const consensus = picks.length ? Math.max(...["胜", "平", "负"].map((v) => picks.filter((x) => x === v).length)) / picks.length : 0;
+  const confidenceScore = Math.min(100, covered * 18 + (hasClose ? 10 : 0) + Math.round(consensus * 18));
+  const confidence = confidenceScore >= 80 ? "较高" : confidenceScore >= 60 ? "中等" : confidenceScore >= 40 ? "偏低" : "谨慎";
+  const main = sn.homeWin >= sn.draw && sn.homeWin >= sn.awayWin ? "主胜" : sn.awayWin >= sn.draw ? "客胜" : "平局";
+  const second = [...[{ label: "主胜", p: sn.homeWin }, { label: "平局", p: sn.draw }, { label: "客胜", p: sn.awayWin }]].sort((a, b) => b.p - a.p)[1];
+  const risks = [
+    !hasLineup ? "首发/阵容资料未完整确认" : "阵容资料已接入，但正式首发仍可能变化",
+    !hasClose ? "缺少开盘到临场的完整变化链" : "临场盘口变化仍可能改变方向等级",
+    picks.length > 1 && consensus < 0.75 ? "不同研判维度对胜平负方向存在分歧" : "多维判断较一致，但一致不代表结果确定",
+    second.p >= (main === "主胜" ? sn.homeWin : main === "客胜" ? sn.awayWin : sn.draw) - 8 ? `首选${main}与次选${second.label}差距有限` : "红牌、点球等偶发事件无法由赛前数据覆盖",
+  ];
+  return <section className="evidence-panel" aria-label="数据质量与反向校验"><div className="evidence-head"><div><span>DATA QUALITY · RED TEAM CHECK</span><h3>证据基础与反向风险</h3></div><b>{covered}/4 项覆盖 · 置信度{confidence} {confidenceScore}</b></div><div className="evidence-grid"><div><span>数据截止</span><strong>{new Date(sn.fetchedAt).toLocaleString("zh-CN", { hour12: false })}</strong><small>以当前快照时间为准</small></div><div><span>已覆盖</span><strong>{[hasOdds && "竞彩票面", hasMarket && "市场报价", hasLineup && "阵容预览", (sn.takes?.length ?? 0) > 0 && "专业研判"].filter(Boolean).join(" · ") || "基础数据"}</strong><small>仅列入系统实际拿到的数据</small></div><div><span>主要方向</span><strong>{main} · {Math.max(sn.homeWin, sn.draw, sn.awayWin).toFixed(1)}%</strong><small>概率是结构化估计，不是保证</small></div><div className="evidence-risk"><span>反向校验</span>{risks.map((x, i) => <p key={i}>· {x}</p>)}</div></div><div className="evidence-foot">置信度依据数据覆盖、临场快照和多维方向一致性计算，不等同于胜率；正式首发、盘口临场变化和突发事件仍需重新核验。</div></section>;
 }
 
 function AICompare({
