@@ -235,6 +235,8 @@ export type ModelTake = {
   verdict?: string;
   hit1x2?: boolean;
   hitOu?: boolean;
+  hitHc?: boolean;
+  hitScore?: boolean;
 };
 
 export type ExpertBoardRow = {
@@ -244,14 +246,23 @@ export type ExpertBoardRow = {
   games: number;
   hit1x2: number;
   hitOu: number;
+  gamesHc: number;
+  hitHc: number;
+  gamesScore: number;
+  hitScore: number;
   rate1x2: number;
   rateOu: number;
+  rateHc: number;
+  rateScore: number;
   points: number;
 };
 
 export type SettledItem = {
   match: MatchRow;
   score: string;
+  hhadLine?: string;
+  actualHhad?: string;
+  expertKind?: "open" | "close";
   takes: ModelTake[];
 };
 

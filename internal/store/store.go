@@ -81,6 +81,8 @@ type ModelTake struct {
 	Verdict      string   `json:"verdict,omitempty"`
 	Hit1X2       *bool    `json:"hit1x2,omitempty"`
 	HitOU        *bool    `json:"hitOu,omitempty"`
+	HitHC        *bool    `json:"hitHc,omitempty"`
+	HitScore     *bool    `json:"hitScore,omitempty"`
 }
 
 type persistedResult struct {
@@ -333,6 +335,29 @@ func (s *Store) PreferredSnapshot(id int64) (*Snapshot, error) {
 		return sn, nil
 	}
 	return s.GetSnapshot(id, KindOpen)
+}
+
+// AuditSnapshot is the last pre-kickoff take with expert cards.
+// Close is the locked prediction used for 对账; open is only a fallback.
+func (s *Store) AuditSnapshot(id int64) (*Snapshot, error) {
+	closeSn, closeErr := s.GetSnapshot(id, KindClose)
+	if closeErr == nil && closeSn != nil && len(closeSn.Takes) > 0 {
+		return closeSn, nil
+	}
+	openSn, openErr := s.GetSnapshot(id, KindOpen)
+	if openErr == nil && openSn != nil && len(openSn.Takes) > 0 {
+		return openSn, nil
+	}
+	if closeSn != nil {
+		return closeSn, nil
+	}
+	if openSn != nil {
+		return openSn, nil
+	}
+	if closeErr != nil {
+		return nil, closeErr
+	}
+	return nil, openErr
 }
 
 func (s *Store) AvailableKinds(id int64) ([]SnapshotKind, error) {

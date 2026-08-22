@@ -2,6 +2,7 @@ package experts
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"jingcai-ai/internal/store"
@@ -23,13 +24,17 @@ func Of(model string) Role {
 		return Role{Key: "goals", Title: "进球分析师", Hint: "专注比赛节奏与进球路径。结合阵型、压迫强度、攻守转换、边路纵深、肋部利用、定位球和大小球盘，判断开放或胶着格局及合理进球区间。"}
 	case "Claude":
 		return Role{Key: "lineup", Title: "阵容分析师", Hint: "专注阵型对位、首发结构、替补深度和伤停影响。分析中前场配置、边翼卫站位、中场人数优势、防线速度与对位弱点；未提供的伤停不得推测。"}
+	case BaselineName:
+		return Role{Key: "shape", Title: "基本盘分析师", Hint: "从欧赔重心、竞彩让球和进球分布给出盘面基准，不解读诱盘故事，也不给买入指令。"}
 	default:
 		return Role{Key: "value", Title: "价值研判师", Hint: "综合市场定价、价格保护与风险信号给出条件性结论。"}
 	}
 }
 
 func Catalog(models []string) []map[string]string {
-	out := make([]map[string]string, 0, len(models))
+	out := make([]map[string]string, 0, len(models)+1)
+	r := Of(BaselineName)
+	out = append(out, map[string]string{"name": BaselineName, "role": r.Title, "key": r.Key, "hint": r.Hint})
 	for _, n := range models {
 		r := Of(n)
 		out = append(out, map[string]string{"name": n, "role": r.Title, "key": r.Key, "hint": r.Hint})
@@ -46,6 +51,8 @@ func Decorate(t *store.ModelTake) {
 	t.RoleKey = r.Key
 	t.Pick1X2 = Norm1X2(t.Pick1X2)
 	t.PickOU = NormOU(t.PickOU)
+	t.PickHandicap = NormHandicap(t.PickHandicap)
+	t.Scores = CleanScores(t.Scores)
 	t.Verdict = NormVerdict(t.Verdict)
 	if t.Pick1X2 == "" {
 		t.Pick1X2 = maxSide(t.HomeWin, t.Draw, t.AwayWin)
@@ -56,6 +63,9 @@ func Decorate(t *store.ModelTake) {
 		} else {
 			t.PickOU = "小"
 		}
+	}
+	if t.Name == BaselineName {
+		return
 	}
 	if t.Verdict == "" {
 		t.Verdict = "可看"
@@ -142,17 +152,118 @@ func ActualOU(home, away int) string {
 	return "小"
 }
 
-type Grade struct {
-	Hit1X2 bool `json:"hit1x2"`
-	HitOU  bool `json:"hitOu"`
-	Points int  `json:"points"`
+func NormHandicap(s string) string {
+	s = strings.ReplaceAll(strings.TrimSpace(s), " ", "")
+	switch {
+	case s == "" || s == "放弃" || s == "观望" || s == "暂不介入" || strings.EqualFold(s, "skip"):
+		return ""
+	case strings.Contains(s, "让平"):
+		return "让平"
+	case strings.Contains(s, "让负"):
+		return "让负"
+	case strings.Contains(s, "让胜"):
+		return "让胜"
+	default:
+		return ""
+	}
 }
 
-func GradeTake(t store.ModelTake, home, away int) Grade {
+func ParseHHADLine(s string) (float64, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, false
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	return f, err == nil
+}
+
+func ActualHHAD(home, away int, line float64) string {
+	adj := float64(home-away) + line
+	switch {
+	case adj > 0.05:
+		return "让胜"
+	case adj < -0.05:
+		return "让负"
+	default:
+		return "让平"
+	}
+}
+
+func ParseScore(s string) (home, away int, ok bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, 0, false
+	}
+	repl := []string{"：", "-", ":", "-", "比", "-", "—", "-", "–", "-", " ", ""}
+	for i := 0; i+1 < len(repl); i += 2 {
+		s = strings.ReplaceAll(s, repl[i], repl[i+1])
+	}
+	parts := strings.Split(s, "-")
+	if len(parts) != 2 {
+		return 0, 0, false
+	}
+	h, e1 := strconv.Atoi(parts[0])
+	a, e2 := strconv.Atoi(parts[1])
+	if e1 != nil || e2 != nil || h < 0 || a < 0 || h > 20 || a > 20 {
+		return 0, 0, false
+	}
+	return h, a, true
+}
+
+func CleanScores(ss []string) []string {
+	out := make([]string, 0, 2)
+	seen := map[string]bool{}
+	for _, raw := range ss {
+		h, a, ok := ParseScore(raw)
+		if !ok {
+			continue
+		}
+		key := fmt.Sprintf("%d-%d", h, a)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, key)
+		if len(out) == 2 {
+			break
+		}
+	}
+	return out
+}
+
+func HitScore(preds []string, home, away int) bool {
+	for _, p := range preds {
+		h, a, ok := ParseScore(p)
+		if ok && h == home && a == away {
+			return true
+		}
+	}
+	return false
+}
+
+type Grade struct {
+	Hit1X2   bool `json:"hit1x2"`
+	HitOU    bool `json:"hitOu"`
+	HasHC    bool `json:"hasHc,omitempty"`
+	HitHC    bool `json:"hitHc,omitempty"`
+	HasScore bool `json:"hasScore,omitempty"`
+	HitScore bool `json:"hitScore,omitempty"`
+	Points   int  `json:"points"`
+}
+
+func GradeTake(t store.ModelTake, home, away int, hhadLine string) Grade {
 	Decorate(&t)
 	g := Grade{
 		Hit1X2: t.Pick1X2 == Actual1X2(home, away),
 		HitOU:  t.PickOU == ActualOU(home, away),
+	}
+	if line, ok := ParseHHADLine(hhadLine); ok && t.PickHandicap != "" {
+		g.HasHC = true
+		g.HitHC = t.PickHandicap == ActualHHAD(home, away, line)
+	}
+	if len(t.Scores) > 0 {
+		g.HasScore = true
+		g.HitScore = HitScore(t.Scores, home, away)
 	}
 	if g.Hit1X2 {
 		g.Points++
@@ -170,15 +281,21 @@ func GradeTake(t store.ModelTake, home, away int) Grade {
 }
 
 type BoardRow struct {
-	Name    string  `json:"name"`
-	Role    string  `json:"role"`
-	RoleKey string  `json:"roleKey"`
-	Games   int     `json:"games"`
-	Hit1X2  int     `json:"hit1x2"`
-	HitOU   int     `json:"hitOu"`
-	Rate1X2 float64 `json:"rate1x2"`
-	RateOU  float64 `json:"rateOu"`
-	Points  int     `json:"points"`
+	Name       string  `json:"name"`
+	Role       string  `json:"role"`
+	RoleKey    string  `json:"roleKey"`
+	Games      int     `json:"games"`
+	Hit1X2     int     `json:"hit1x2"`
+	HitOU      int     `json:"hitOu"`
+	GamesHC    int     `json:"gamesHc"`
+	HitHC      int     `json:"hitHc"`
+	GamesScore int     `json:"gamesScore"`
+	HitScore   int     `json:"hitScore"`
+	Rate1X2    float64 `json:"rate1x2"`
+	RateOU     float64 `json:"rateOu"`
+	RateHC     float64 `json:"rateHc"`
+	RateScore  float64 `json:"rateScore"`
+	Points     int     `json:"points"`
 }
 
 func Board(rows []BoardRow) []BoardRow {
@@ -186,6 +303,12 @@ func Board(rows []BoardRow) []BoardRow {
 		if rows[i].Games > 0 {
 			rows[i].Rate1X2 = float64(rows[i].Hit1X2) / float64(rows[i].Games) * 100
 			rows[i].RateOU = float64(rows[i].HitOU) / float64(rows[i].Games) * 100
+		}
+		if rows[i].GamesHC > 0 {
+			rows[i].RateHC = float64(rows[i].HitHC) / float64(rows[i].GamesHC) * 100
+		}
+		if rows[i].GamesScore > 0 {
+			rows[i].RateScore = float64(rows[i].HitScore) / float64(rows[i].GamesScore) * 100
 		}
 		r := Of(rows[i].Name)
 		if rows[i].Role == "" {

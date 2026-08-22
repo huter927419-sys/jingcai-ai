@@ -77,9 +77,9 @@ export default function Today() {
           <p>价值研判不是简单预测胜负。系统同步观察比赛概率、欧亚盘态度、资金拥挤与临场变化，识别“方向正确但价格不值”的常见陷阱。</p>
         </div>
         <div className="value-story-points">
-          <div><b>01</b><span>先判断比赛方向<small>基本面与场上格局</small></span></div>
-          <div><b>02</b><span>再检查市场定价<small>赔率、盘口与资金信号</small></span></div>
-          <div><b>03</b><span>最后给执行等级<small>主推 · 可看 · 回避</small></span></div>
+          <div><b>01</b><span>先看比赛格局<small>结构分布，不是推荐</small></span></div>
+          <div><b>02</b><span>再听专家怎么解释<small>基本盘基准，盘口、进球、阵容独立判断</small></span></div>
+          <div><b>03</b><span>最后看价值等级<small>价格值不值得做</small></span></div>
         </div>
         <div className="method-seal">专有方法论<small>权重与阈值不公开</small></div>
       </section>
@@ -90,10 +90,10 @@ export default function Today() {
         <Link className="overview-item link" to="/results"><span>今日完场</span><strong>{finished}</strong><small>进入复盘中心 →</small></Link>
       </div>
       <section className="reading-map" aria-label="分析阅读路径">
-        <div className="reading-map-title"><span>READING PATH</span><h2>三步看懂一场研判</h2><p>首页先筛方向，详情页再核验证据与价格。</p></div>
-        <div className="reading-step"><i><IconGauge size={18} /></i><div><em>01</em><b>先看方向强度</b><small>主方向与次选差距越大，比赛格局越清晰</small></div></div>
-        <div className="reading-step"><i><IconGrid size={18} /></i><div><em>02</em><b>再核对支撑证据</b><small>结合票面变化、阵型首发与伤停信息</small></div></div>
-        <div className="reading-step signature"><i><IconScale size={18} /></i><div><em>03</em><b>最后看价值等级</b><small>主推、可看、回避决定是否具备参考条件</small></div></div>
+        <div className="reading-map-title"><span>READING PATH</span><h2>三层不要混成一句</h2><p>格局是分布，专家是解读，价值才是是否执行。</p></div>
+        <div className="reading-step"><i><IconGauge size={18} /></i><div><em>01</em><b>先看比赛格局</b><small>结构分布说明更常怎么走，不是推荐</small></div></div>
+        <div className="reading-step"><i><IconGrid size={18} /></i><div><em>02</em><b>再对照专家解盘</b><small>基本盘是基准，四位专家允许和它不一致</small></div></div>
+        <div className="reading-step signature"><i><IconScale size={18} /></i><div><em>03</em><b>最后看价值等级</b><small>主推、可看、回避才是是否执行</small></div></div>
       </section>
       <div className="toolbar">
         <div><b>赛事列表</b><span>{rows.length ? `共 ${rows.length} 场，点击赛事查看完整研判` : "等待今日赛程数据"}</span></div>
@@ -158,9 +158,9 @@ function ScanCard({ m }: { m: MatchRow }) {
       </div>
       <div className="scan-body">
         {shape ? (
-          <div><div className="block-h">赛果概率</div><ScanShape home={shape.homeWin} draw={shape.draw} away={shape.awayWin} over={shape.over25} /></div>
+          <div><div className="block-h">结构分布</div><ScanShape home={shape.homeWin} draw={shape.draw} away={shape.awayWin} over={shape.over25} /></div>
         ) : (
-          <div className="pred muted">走势还在分析。</div>
+          <div className="pred muted">格局还在分析。</div>
         )}
         <div className="scan-ticket">
           <div className="block-h">竞彩票面</div>
@@ -197,7 +197,7 @@ function ScanCard({ m }: { m: MatchRow }) {
       </div>
       {digest ? (
         <div className="scan-insight">
-          <div className="scan-insight-lead"><IconGauge size={16} /><span>主方向<strong>{digest.direction}</strong></span><b className={`strength ${digest.tone}`}>{digest.strength}</b></div>
+          <div className="scan-insight-lead"><IconGauge size={16} /><span>概率重心<strong>{digest.direction}</strong></span><b className={`strength ${digest.tone}`}>{digest.strength}</b></div>
           <div className="scan-indicator"><IconChart size={14} /><span>方向差</span><b>{digest.gap.toFixed(1)}%</b><i><em style={{ width: `${Math.min(100, digest.gap * 4)}%` }} /></i></div>
           <div className="scan-indicator"><IconGoals size={14} /><span>进球倾向</span><b>{shape!.over25 >= 52 ? "偏大" : shape!.over25 <= 48 ? "偏小" : "均衡"}</b><i><em style={{ width: `${shape!.over25}%` }} /></i></div>
           <div className="scan-indicator readiness"><IconShield size={14} /><span>票面完整</span><b>{ticketReady}/3</b><i><em style={{ width: `${(ticketReady / 3) * 100}%` }} /></i></div>

@@ -478,7 +478,7 @@ func (s *Server) match(w http.ResponseWriter, r *http.Request) {
 		pub.Takes = append([]store.ModelTake(nil), open.Takes...)
 		expertKind = store.KindOpen
 	}
-	gradeTakes(pub.Takes, m)
+	pub.Takes = experts.WithBaseline(pub.Takes, sn)
 	var oddsOpen, oddsClose *eval.Board
 	if open != nil {
 		oddsOpen = eval.BoardFromJSON(open.OddsJSON)
@@ -486,6 +486,7 @@ func (s *Server) match(w http.ResponseWriter, r *http.Request) {
 	if closeSn != nil {
 		oddsClose = eval.BoardFromJSON(closeSn.OddsJSON)
 	}
+	gradeTakes(pub.Takes, m, hhadLineOf(pub.Odds, oddsOpen, oddsClose))
 	writeJSON(w, http.StatusOK, map[string]any{
 		"match":      m,
 		"available":  kinds,
@@ -521,34 +522,53 @@ func (s *Server) experts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	board := map[string]*experts.BoardRow{}
+	base := experts.Of(experts.BaselineName)
+	board[experts.BaselineName] = &experts.BoardRow{Name: experts.BaselineName, Role: base.Title, RoleKey: base.Key}
 	for _, n := range s.Models {
 		r := experts.Of(n)
 		board[n] = &experts.BoardRow{Name: n, Role: r.Title, RoleKey: r.Key}
 	}
 	type item struct {
-		Match store.MatchRow    `json:"match"`
-		Score string            `json:"score"`
-		Takes []store.ModelTake `json:"takes"`
+		Match      store.MatchRow     `json:"match"`
+		Score      string             `json:"score"`
+		HHADLine   string             `json:"hhadLine,omitempty"`
+		ActualHHAD string             `json:"actualHhad,omitempty"`
+		ExpertKind store.SnapshotKind `json:"expertKind,omitempty"`
+		Takes      []store.ModelTake  `json:"takes"`
 	}
 	recent := make([]item, 0, len(settled))
 	yesterday := make([]item, 0)
 	pending := 0
 	yestBiz := time.Now().In(s.Location).Add(-4*time.Hour).AddDate(0, 0, -1).Format("2006-01-02")
 	for _, m := range settled {
-		sn, err := s.Store.GetSnapshot(m.ID, store.KindOpen)
-		if err != nil || sn == nil || len(sn.Takes) == 0 {
-			if alt, e2 := s.Store.PreferredSnapshot(m.ID); e2 == nil && alt != nil {
-				sn = alt
-			}
+		sn, err := s.Store.AuditSnapshot(m.ID)
+		if err != nil {
+			sn = nil
 		}
 		takes := []store.ModelTake{}
-		if sn != nil && len(sn.Takes) > 0 {
-			takes = append([]store.ModelTake(nil), sn.Takes...)
-			gradeTakes(takes, &m)
-		} else {
+		line := hhadLineFromSnapshot(sn)
+		if sn != nil {
+			takes = experts.WithBaseline(sn.Takes, sn)
+		}
+		if len(takes) > 0 {
+			takes = append([]store.ModelTake(nil), takes...)
+			gradeTakes(takes, &m, line)
+		}
+		hasVoice := false
+		for _, t := range takes {
+			if t.Name != experts.BaselineName {
+				hasVoice = true
+				break
+			}
+		}
+		if !hasVoice {
 			pending++
 		}
 		hg, ag := *m.HomeGoals, *m.AwayGoals
+		actualHC := ""
+		if v, ok := experts.ParseHHADLine(line); ok {
+			actualHC = experts.ActualHHAD(hg, ag, v)
+		}
 		for _, t := range takes {
 			row := board[t.Name]
 			if row == nil {
@@ -557,19 +577,36 @@ func (s *Server) experts(w http.ResponseWriter, r *http.Request) {
 				board[t.Name] = row
 			}
 			row.Games++
-			g := experts.GradeTake(t, hg, ag)
+			g := experts.GradeTake(t, hg, ag, line)
 			if g.Hit1X2 {
 				row.Hit1X2++
 			}
 			if g.HitOU {
 				row.HitOU++
 			}
+			if g.HasHC {
+				row.GamesHC++
+				if g.HitHC {
+					row.HitHC++
+				}
+			}
+			if g.HasScore {
+				row.GamesScore++
+				if g.HitScore {
+					row.HitScore++
+				}
+			}
 			row.Points += g.Points
 		}
 		it := item{
-			Match: m,
-			Score: fmt.Sprintf("%d-%d", hg, ag),
-			Takes: takes,
+			Match:      m,
+			Score:      fmt.Sprintf("%d-%d", hg, ag),
+			HHADLine:   line,
+			ActualHHAD: actualHC,
+			Takes:      takes,
+		}
+		if sn != nil {
+			it.ExpertKind = sn.Kind
 		}
 		if m.BusinessDate == yestBiz {
 			yesterday = append(yesterday, it)
@@ -577,6 +614,10 @@ func (s *Server) experts(w http.ResponseWriter, r *http.Request) {
 		recent = append(recent, it)
 	}
 	rows := make([]experts.BoardRow, 0, len(board))
+	if board[experts.BaselineName] != nil {
+		rows = append(rows, *board[experts.BaselineName])
+		delete(board, experts.BaselineName)
+	}
 	for _, n := range s.Models {
 		if board[n] != nil {
 			rows = append(rows, *board[n])
@@ -596,16 +637,40 @@ func (s *Server) experts(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func gradeTakes(takes []store.ModelTake, m *store.MatchRow) {
+func gradeTakes(takes []store.ModelTake, m *store.MatchRow, hhadLine string) {
 	for i := range takes {
 		experts.Decorate(&takes[i])
 		if m != nil && m.Finished && m.HomeGoals != nil && m.AwayGoals != nil {
-			g := experts.GradeTake(takes[i], *m.HomeGoals, *m.AwayGoals)
+			g := experts.GradeTake(takes[i], *m.HomeGoals, *m.AwayGoals, hhadLine)
 			h, o := g.Hit1X2, g.HitOU
 			takes[i].Hit1X2 = &h
 			takes[i].HitOU = &o
+			if g.HasHC {
+				hc := g.HitHC
+				takes[i].HitHC = &hc
+			}
+			if g.HasScore {
+				sc := g.HitScore
+				takes[i].HitScore = &sc
+			}
 		}
 	}
+}
+
+func hhadLineFromSnapshot(sn *store.Snapshot) string {
+	if sn == nil {
+		return ""
+	}
+	return hhadLineOf(eval.BoardFromJSON(sn.OddsJSON))
+}
+
+func hhadLineOf(boards ...*eval.Board) string {
+	for _, b := range boards {
+		if b != nil && strings.TrimSpace(b.HHADLine) != "" {
+			return strings.TrimSpace(b.HHADLine)
+		}
+	}
+	return ""
 }
 
 func statusOfMatch(m *store.MatchRow, k store.SnapshotKind) string {

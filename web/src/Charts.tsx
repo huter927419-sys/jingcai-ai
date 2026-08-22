@@ -116,7 +116,7 @@ export function ShapeHero({
     <div className="shape-hero">
       <Donut1X2 home={home} draw={draw} away={away} />
       <div className="shape-hero-side">
-        <div className="block-h">胜平负</div>
+        <div className="block-h">胜平负结构分布</div>
         <div className="vbars">
           {rows.map((r) => (
             <div className="vbar-row" key={r.lab}>
@@ -129,7 +129,7 @@ export function ShapeHero({
           ))}
         </div>
         <div className="block-h" style={{ marginTop: 14 }}>
-          大小 2.5
+          大小 2.5 倾向
         </div>
         <div className="play-prices two">
           <div>

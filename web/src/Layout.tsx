@@ -78,12 +78,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
           {remaining > 0 ? <div className={`access-remaining${remaining <= 86400 ? " soon" : ""}`} title={expiresAt ? `到期时间：${new Date(expiresAt).toLocaleString("zh-CN", { hour12: false })}` : ""}><span className="access-dot" />{durationDays ? `${durationDays}天授权 · ` : ""}剩余 <b>{formatRemaining(remaining)}</b></div> : null}
         </div>
+        <p className="legal-banner" role="note">本网站仅提供体育赛事客观数据，不构成任何购彩建议，彩票开奖随机，请勿投机购彩</p>
       </header>
       <div className="shell">
         {children}
         <footer className="analysis-disclaimer">
-          <b>分析声明</b>
-          <span>本站展示的盘口、概率、价值等级、情景比分及参考买入均基于有限数据和特定时间截面的分析，仅供研究参考，不构成任何结果或收益保证。数据延迟、临场变盘、阵容调整及比赛偶发事件均可能导致判断失效，请独立决策，相关风险与结果由使用者自行承担。</span>
+          <b>购彩提示</b>
+          <span><strong>本网站仅提供体育赛事客观数据，不构成任何购彩建议，彩票开奖随机，请勿投机购彩。</strong>本站展示的盘口、概率、价值等级、情景比分及参考买入均基于有限数据和特定时间截面的分析，仅供研究参考，不构成任何结果或收益保证。数据延迟、临场变盘、阵容调整及比赛偶发事件均可能导致判断失效，请独立决策，相关风险与结果由使用者自行承担。</span>
         </footer>
       </div>
       <nav className="mobile-nav" aria-label="移动端主导航">

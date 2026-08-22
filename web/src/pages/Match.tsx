@@ -134,8 +134,9 @@ export default function Match() {
         <>
           <div className="verdict-strip">
             <div>
-              <h1 className="headline">{sn.headline}</h1>
-              <p className="layer-talk">{basicTalk(sn, now)}</p>
+              <span className="strip-kicker">结构估计 · 不是专家结论</span>
+              <h1 className="headline">{shapeHeadline(sn)}</h1>
+              <p className="layer-talk">{basicTalk(sn, now)}这是结构估计，用来理解比赛更常怎么走。专家怎么解盘、价格值不值得做，分别在第 03、04 层，不要和这里合成一句预测。</p>
             </div>
             <div className="verdict-side">
               {best ? (
@@ -147,7 +148,7 @@ export default function Match() {
                 <span className="pred muted">价值还没齐</span>
               )}
               <div className="ai-row" style={{ margin: 0 }}>
-                <span className="hud-chip">多维交叉研判</span>
+                <span className="hud-chip">价值等级 · 价格值不值得做</span>
               </div>
             </div>
           </div>
@@ -155,19 +156,19 @@ export default function Match() {
           <DetailOverview sn={sn} best={best} now={now} previewReady={Boolean(data.preview?.home || data.preview?.away)} />
           <EvidencePanel sn={sn} data={data} now={now} market={market} />
           <nav className="detail-index" aria-label="详情分析导航">
-            <a href="#trend"><IconChart size={16} /><span><b>01 走势</b><small>概率 · 比分 · 阵容</small></span></a>
+            <a href="#trend"><IconChart size={16} /><span><b>01 格局</b><small>分布 · 阵容 · 不是推荐</small></span></a>
             <a href="#ticket"><IconGrid size={16} /><span><b>02 票面</b><small>{sfc ? "欧赔 · 亚盘 · 大小" : "赔率 · 让球 · 变化"}</small></span></a>
-            <a href="#analysis"><IconTalk size={16} /><span><b>03 专业研判</b><small>格局 · 方向 · 风险</small></span></a>
-            <a href="#value"><IconScale size={16} /><span><b>04 价值研判™</b><small>价格 · 保护 · 等级</small></span></a>
+            <a href="#analysis"><IconTalk size={16} /><span><b>03 专家解盘</b><small>独立判断 · 允许分歧</small></span></a>
+            <a href="#value"><IconScale size={16} /><span><b>04 价值研判™</b><small>价格 · 保护 · 是否执行</small></span></a>
           </nav>
 
-          <Layer id="trend" n="01" title="走势" hint="先看这场更常怎么结束，再看阵容能不能撑住这个判断。">
+          <Layer id="trend" n="01" title="比赛格局" hint="这是结构分布：这场更常怎么走。用来建立形态，不是专家推荐，也不是买入结论。">
             <ShapeHero home={sn.homeWin} draw={sn.draw} away={sn.awayWin} over={sn.over25} under={sn.under25} />
             <div className="block">
               <div className="block-h">情景比分分布 · 主进球 \ 客进球</div>
               <div className="score-note">
-                <span>情景参考</span>
-                <p>比分概率用于理解比赛可能呈现的节奏、胜负路径与进球区间。足球比赛受临场战术、红牌和偶发事件影响较大，单一比分不代表确定赛果，请结合方向与盘口研判使用。</p>
+                <span>路径参考，不是比分预测</span>
+                <p>热区只说明哪些比分路径相对更常见，用来理解节奏和进球区间。不要把它读成“会出这个比分”，也不要和专家卡片里的情景比分一一对赌。</p>
               </div>
               <ScoreHeat tops={sn.topScores ?? []} grid={sn.grid ?? []} />
             </div>
@@ -206,11 +207,21 @@ export default function Match() {
             {sfc ? null : <TicketAdvice sn={sn} odds={now} />}
           </Layer>
 
-          <Layer id="analysis" n="03" title="专业研判" hint="先对照上方竞彩基础参考，再看各位专家如何解释盘口、阵型和比赛格局。">
+          <Layer id="analysis" n="03" title="专家解盘" hint="先看基本盘给出的盘面基准，再看四位专家从盘口、进球、阵容和定价独立解读。允许和基本盘不一致；不一致时继续看价值，而不是选一个当标准答案。">
+            <div className="layer-guide">
+              <b>怎么读这一层</b>
+              <span>基本盘分析师只回答“价格和分布现在站哪边”。盘口分析师看升降水和诱盘，另外三位看进球、阵容和定价。五套口径并存，基本盘不是标准答案。</span>
+            </div>
             {data.expertKind === "open" && sn.kind === "close" ? (
               <div className="expert-source-note">
                 <b>赛前研判留档</b>
-                <span>本场临场快照未生成新的专业解读，以下内容采用赛前留档；临场盘口与价值数据仍以上方当前快照为准。</span>
+                <span>本场临场快照未生成新的专家解盘，以下内容采用赛前留档；临场盘口与价值数据仍以上方当前快照为准。</span>
+              </div>
+            ) : null}
+            {m.finished && sn.kind === "open" && data.available.includes("close") ? (
+              <div className="expert-source-note">
+                <b>这是赛前稿</b>
+                <span>专家临场可能改口。复盘成绩按临场解盘计算，切到临场才是计入对账的那一版。</span>
               </div>
             ) : null}
             <AICompare
@@ -223,7 +234,7 @@ export default function Match() {
             <RiskNotice strong>以上分析和参考买入仅供信息研究，不构成收益保证。请结合自身判断审慎决策，由此产生的相关风险与结果由使用者自行承担。</RiskNotice>
           </Layer>
 
-          <Layer id="value" n="04" title="价值研判™" hint="本系统独有的决策矩阵：判断方向，更判断当前价格是否值得执行。">
+          <Layer id="value" n="04" title="价值研判™" hint="看完格局和专家之后，这里只回答一件事：当前价格值不值得做。方向对也可能回避。">
             <ValueMatrix had={hadGates} ou={ouGates} asia={asiaGates} picked={picked} />
             <div className="public-metrics">
               <div className="public-metrics-head"><b>公开指标参考</b><span>价值差、凯利与判定区间用于辅助理解；专属权重和综合裁决逻辑不公开。</span></div>
@@ -250,8 +261,8 @@ function DetailOverview({ sn, best, now, previewReady }: { sn: Snapshot; best?: 
   const dataCount = Number(oddsReady) + Number(previewReady) + Number((sn.takes?.length ?? 0) > 0);
   return (
     <section className="detail-overview" aria-label="本场摘要指标">
-      <div className="detail-overview-title"><span>本场摘要</span><b>先读结论，再逐层核验</b></div>
-      <div><IconGauge size={17} /><span>主方向<strong>{outcomes[0].label}</strong><small>{outcomes[0].p.toFixed(1)}%</small></span></div>
+      <div className="detail-overview-title"><span>本场摘要</span><b>先看格局，再核票面、专家与价格</b></div>
+      <div><IconGauge size={17} /><span>概率重心<strong>{outcomes[0].label}</strong><small>{outcomes[0].p.toFixed(1)}% · 分布不是推荐</small></span></div>
       <div><IconChart size={17} /><span>方向强度<strong>{gap >= 18 ? "清晰" : gap >= 8 ? "倾向" : "胶着"}</strong><small>领先次选 {gap.toFixed(1)}%</small></span></div>
       <div><IconBall size={17} /><span>进球倾向<strong>{sn.over25 >= 52 ? "偏大" : sn.over25 <= 48 ? "偏小" : "均衡"}</strong><small>大 2.5 {sn.over25.toFixed(1)}%</small></span></div>
       <div><IconScale size={17} /><span>价值等级<strong>{best?.verdict ? <>{verdictLabel(best.verdict)} <VerdictHelp verdict={best.verdict} /></> : "待确认"}</strong><small>{best?.label || "等待市场数据"}</small></span></div>
@@ -276,9 +287,9 @@ function EvidencePanel({ sn, data, now, market }: { sn: Snapshot; data: MatchDet
     !hasLineup ? "首发/阵容资料未完整确认" : "阵容资料已接入，但正式首发仍可能变化",
     !hasClose ? "缺少开盘到临场的完整变化链" : "临场盘口变化仍可能改变方向等级",
     picks.length > 1 && consensus < 0.75 ? "不同研判维度对胜平负方向存在分歧" : "多维判断较一致，但一致不代表结果确定",
-    second.p >= (main === "主胜" ? sn.homeWin : main === "客胜" ? sn.awayWin : sn.draw) - 8 ? `首选${main}与次选${second.label}差距有限` : "红牌、点球等偶发事件无法由赛前数据覆盖",
+    second.p >= (main === "主胜" ? sn.homeWin : main === "客胜" ? sn.awayWin : sn.draw) - 8 ? `重心${main}与次档${second.label}差距有限` : "红牌、点球等偶发事件无法由赛前数据覆盖",
   ];
-  return <section className="evidence-panel" aria-label="数据质量与反向校验"><div className="evidence-head"><div><span>DATA QUALITY · RED TEAM CHECK</span><h3>证据基础与反向风险</h3></div><b>{covered}/4 项覆盖 · 置信度{confidence} {confidenceScore}</b></div><div className="evidence-grid"><div><span>数据截止</span><strong>{new Date(sn.fetchedAt).toLocaleString("zh-CN", { hour12: false })}</strong><small>以当前快照时间为准</small></div><div><span>已覆盖</span><strong>{[hasOdds && "竞彩票面", hasMarket && "市场报价", hasLineup && "阵容预览", (sn.takes?.length ?? 0) > 0 && "专业研判"].filter(Boolean).join(" · ") || "基础数据"}</strong><small>仅列入系统实际拿到的数据</small></div><div><span>主要方向</span><strong>{main} · {Math.max(sn.homeWin, sn.draw, sn.awayWin).toFixed(1)}%</strong><small>概率是结构化估计，不是保证</small></div><div className="evidence-risk"><span>反向校验</span>{risks.map((x, i) => <p key={i}>· {x}</p>)}</div></div><div className="evidence-foot">置信度依据数据覆盖、临场快照和多维方向一致性计算，不等同于胜率；正式首发、盘口临场变化和突发事件仍需重新核验。</div></section>;
+    return <section className="evidence-panel" aria-label="数据质量与反向校验"><div className="evidence-head"><div><span>DATA QUALITY · RED TEAM CHECK</span><h3>证据基础与反向风险</h3></div><b>{covered}/4 项覆盖 · 置信度{confidence} {confidenceScore}</b></div><div className="evidence-grid"><div><span>数据截止</span><strong>{new Date(sn.fetchedAt).toLocaleString("zh-CN", { hour12: false })}</strong><small>以当前快照时间为准</small></div><div><span>已覆盖</span><strong>{[hasOdds && "竞彩票面", hasMarket && "市场报价", hasLineup && "阵容预览", (sn.takes?.length ?? 0) > 0 && "专家解盘"].filter(Boolean).join(" · ") || "基础数据"}</strong><small>仅列入系统实际拿到的数据</small></div><div><span>概率重心</span><strong>{main} · {Math.max(sn.homeWin, sn.draw, sn.awayWin).toFixed(1)}%</strong><small>结构估计，不是专家推荐</small></div><div className="evidence-risk"><span>反向校验</span>{risks.map((x, i) => <p key={i}>· {x}</p>)}</div></div><div className="evidence-foot">置信度依据数据覆盖、临场快照和多维方向一致性计算，不等同于胜率；正式首发、盘口临场变化和突发事件仍需重新核验。</div></section>;
 }
 
 function AICompare({
@@ -296,6 +307,7 @@ function AICompare({
 }) {
   const takes = sn.takes ?? [];
   const cards = takes.slice();
+  const voices = cards.filter((t) => t.roleKey !== "shape");
   const series = cards.map((t) => ({
     name: t.role || "专业研判",
     color: roleColor(t.roleKey),
@@ -304,12 +316,12 @@ function AICompare({
     <>
       {finished && score ? <p className="pred muted">完场 {score}。本场对账如下，汇总在结果页。</p> : null}
       {!cards.length ? (
-        <p className="pred muted">专业研判正在生成，将综合阵容、盘口与市场价值数据自动更新。</p>
+        <p className="pred muted">专家解盘正在生成，将综合阵容、盘口与市场数据自动更新。</p>
       ) : (
         <>
-          <TradePlan sn={sn} cards={cards} odds={odds} />
+          {voices.length ? <TradePlan sn={sn} cards={voices} odds={odds} /> : <p className="pred muted">四位专家还在生成。下方先看盘面基准。</p>}
           <GroupBars
-            title="各维度胜平负判断"
+            title="专家各自的胜平负判断"
             series={series}
             categories={["胜", "平", "负"]}
             values={[
@@ -319,7 +331,7 @@ function AICompare({
             ]}
           />
           <GroupBars
-            title="各维度进球判断"
+            title="专家各自的进球判断"
             series={series}
             categories={["大 2.5"]}
             values={[cards.map((t) => t.over25)]}
@@ -346,6 +358,12 @@ function AICompare({
                   {t.hitOu != null ? (
                     <span className={`verdict ${t.hitOu ? "v-主推" : "v-放弃"}`}>{t.hitOu ? "大小中" : "大小未中"}</span>
                   ) : null}
+                  {t.hitHc != null ? (
+                    <span className={`verdict ${t.hitHc ? "v-主推" : "v-放弃"}`}>{t.hitHc ? "让球中" : "让球未中"}</span>
+                  ) : null}
+                  {t.hitScore != null ? (
+                    <span className={`verdict ${t.hitScore ? "v-主推" : "v-放弃"}`}>{t.hitScore ? "比分中" : "比分未中"}</span>
+                  ) : null}
                 </div>
                 <div className="expert-quickread">
                   <div><span>解盘结构</span><b>{t.pattern || "盘口与概率交叉验证"}</b></div>
@@ -355,9 +373,11 @@ function AICompare({
                 <div className="expert-analysis"><b>专业解盘</b><p>{t.plainTalk || "研判内容暂未生成。"}</p>{ticketInterpretation(t.pickHandicap, odds)}</div>
                 {t.buyTalk ? (
                   <div className="buy-talk">
-                    <b>参考买入</b>
-                    <p>{normalizeAdvice(t.buyTalk)}</p>
+                    <b>{t.roleKey === "shape" ? "基准说明" : "参考买入"}</b>
+                    <p>{t.roleKey === "shape" ? t.buyTalk : normalizeAdvice(t.buyTalk)}</p>
+                    {t.roleKey === "shape" ? null : (
                     <span className="buy-risk">风险提示：本观点依赖当前盘口、阵容与市场信息，临场变化可能导致判断失效。请独立决策，相关风险由使用者自行承担。</span>
+                    )}
                   </div>
                 ) : null}
               </article>
@@ -382,16 +402,16 @@ function TradePlan({ sn, cards, odds }: { sn: Snapshot; cards: ModelTake[]; odds
   const pattern = cards.find((t) => t.pattern)?.pattern || patternOf(sn);
   return (
     <section className="trade-plan">
-      <div className="trade-plan-head"><span>综合执行方案</span><b>{active.some((t) => t.verdict === "主推") ? <>具备主推条件 <VerdictHelp verdict="主推" /></> : "谨慎参考"}</b></div>
+      <div className="trade-plan-head"><span>专家共识摘要</span><b>{active.some((t) => t.verdict === "主推") ? "有专家给出主推" : "专家整体偏谨慎"}</b></div>
       <div className="trade-plan-grid">
-        <div><span>比赛格局</span><strong>{pattern}</strong></div>
-        <div className="primary"><span>主方向</span><strong>胜平负 {pick || "待确认"}</strong></div>
-        <div><span>让球方向</span><strong>{handicap ? `${handicap}${handicapSp(handicap, odds)}` : sn.handicap?.pick ? `${sn.handicap.pick}${handicapSp(sn.handicap.pick, odds)}` : "待确认"}</strong></div>
-        <div><span>大小球</span><strong>{ou ? `${ou} 2.5` : "待确认"}</strong></div>
+        <div><span>多数格局</span><strong>{pattern}</strong></div>
+        <div className="primary"><span>多数方向</span><strong>胜平负 {pick || "待确认"}</strong></div>
+        <div><span>让球多数</span><strong>{handicap ? `${handicap}${handicapSp(handicap, odds)}` : sn.handicap?.pick ? `${sn.handicap.pick}${handicapSp(sn.handicap.pick, odds)}` : "待确认"}</strong></div>
+        <div><span>大小球多数</span><strong>{ou ? `${ou} 2.5` : "待确认"}</strong></div>
         <div><span>情景比分</span><strong>{scoreText}</strong></div>
       </div>
-      <p>先按比赛格局确定主方向，再用盘口与价值关卡确认是否执行；临场退盘、核心首发变化或价值转负时应降低结论等级。</p>
-      <div className="trade-risk">风险提示：综合方案基于当前可得数据，不代表确定赛果或收益承诺；请独立判断并自行承担相关决策风险。</div>
+      <p>这是四位专家独立判断的多数口径，可能与上方结构分布不一致。是否执行看第 04 层价值等级，不要把这里当成买入指令。</p>
+      <div className="trade-risk">风险提示：以上是专家多数口径的摘要，不代表确定赛果或收益承诺；请独立判断并自行承担相关决策风险。</div>
     </section>
   );
 }
@@ -509,7 +529,7 @@ function TicketAdvice({ sn, odds }: { sn: Snapshot; odds?: OddsBoard | null }) {
     { label: "负", p: sn.awayWin },
   ].sort((a, b) => b.p - a.p);
   const hadGap = had[0].p - had[1].p;
-  const hadText = hadGap >= 10 ? `主选 ${had[0].label}` : `主选 ${had[0].label}，备选 ${had[1].label}`;
+  const hadText = hadGap >= 10 ? `重心 ${had[0].label}` : `重心 ${had[0].label}，次档 ${had[1].label}`;
   const hhad = [
     { label: "让胜", p: odds?.hhadMarketH ?? 0 },
     { label: "让平", p: odds?.hhadMarketD ?? 0 },
@@ -529,7 +549,7 @@ function TicketAdvice({ sn, odds }: { sn: Snapshot; odds?: OddsBoard | null }) {
     <section className="ticket-advice" aria-label="竞彩基础参考">
       <div className="ticket-advice-head">
         <div><span>SPORTTERY BASICS</span><h3>竞彩基础参考</h3></div>
-        <b>按玩法拆解</b>
+        <b>对照玩法，不是买入</b>
       </div>
       <div className="ticket-advice-grid">
         <div className="ticket-pick primary">
@@ -539,23 +559,23 @@ function TicketAdvice({ sn, odds }: { sn: Snapshot; odds?: OddsBoard | null }) {
         </div>
         <div className="ticket-pick">
           <span>让球胜平负 {handicap || ""}</span>
-          <strong>{hhadReady ? `主选 ${hhad[0].label}${hhad[0].p - hhad[1].p < 8 ? `，备选 ${hhad[1].label}` : ""}` : "票面未齐，暂不建议介入"}</strong>
+          <strong>{hhadReady ? `重心 ${hhad[0].label}${hhad[0].p - hhad[1].p < 8 ? `，次档 ${hhad[1].label}` : ""}` : "票面未齐，暂不对照"}</strong>
           <small>{hhadReady ? <>SP {handicapSpRows.map((x) => `${x.label} ${fmtSp(x.price)}`).join(" · ")} · 让球数按主队口径</> : "等待官方让球数与 SP 完整更新"}</small>
         </div>
         <div className="ticket-pick">
           <span>总进球</span>
-          <strong>{goalPicks.length ? `参考 ${goalPicks.map((x) => x.goals).join(" / ")} 球` : "分布不足，暂不建议介入"}</strong>
+          <strong>{goalPicks.length ? `对照 ${goalPicks.map((x) => x.goals).join(" / ")} 球` : "分布不足，暂不对照"}</strong>
           <small>{goalPicks.length ? goalPicks.map((x) => `${x.goals}球 ${x.p.toFixed(1)}%`).join(" · ") : "按竞彩 0–7+ 口径统计"}</small>
         </div>
         <div className="ticket-pick">
           <span>比分</span>
-          <strong>{scorePicks.length ? `情景 ${scorePicks.map((x) => x.score).join(" / ")}` : "分布不足，暂不建议介入"}</strong>
+          <strong>{scorePicks.length ? `路径 ${scorePicks.map((x) => x.score).join(" / ")}` : "分布不足，暂不对照"}</strong>
           <small>高波动玩法，仅用于辅助理解比赛路径</small>
         </div>
       </div>
       <div className="ticket-rule-note">
-        <b>参考顺序</b>
-        <span>优先判断胜平负格局，再核对官方让球数；总进球与比分属于更高波动玩法，不宜作为确定性结论。临场退盘、核心首发变化或主方向概率收敛时，应降级为观望。</span>
+        <b>怎么读</b>
+        <span>这里只是把结构分布对照到竞彩玩法，方便核对官方怎么卖。它不是专家结论，也不是价值等级。总进球与比分波动更高，只作路径理解。</span>
       </div>
       <div className="ticket-risk">风险提示：以上为当前票面与概率分布下的基础参考，不构成投注指令、赛果或收益保证。请以实际出票规则和票面为准，独立决策，相关风险与结果由使用者自行承担。</div>
     </section>
@@ -581,6 +601,7 @@ function MoveCell({ label, from, to }: { label: string; from?: number; to?: numb
 }
 
 function roleColor(role?: string): string {
+  if (role === "shape") return "#475569";
   if (role === "market") return "#0b9668";
   if (role === "goals") return "#d28b16";
   if (role === "lineup") return "#3b82f6";
@@ -589,6 +610,7 @@ function roleColor(role?: string): string {
 }
 
 function roleMeta(role?: string): { focus: string } {
+  if (role === "shape") return { focus: "欧赔重心 · 让球分布 · 进球路径" };
   if (role === "market") return { focus: "欧亚盘联动 · 水位变化 · 成交热度" };
   if (role === "goals") return { focus: "比赛节奏 · 进球路径 · 大小球" };
   if (role === "lineup") return { focus: "阵型对位 · 首发结构 · 伤停影响" };
@@ -597,6 +619,7 @@ function roleMeta(role?: string): { focus: string } {
 }
 
 function roleTitle(role?: string, fallback?: string): string {
+  if (role === "shape") return "基本盘分析师";
   if (role === "market") return "盘口分析师";
   if (role === "goals") return "进球分析师";
   if (role === "lineup") return "阵容分析师";
@@ -697,19 +720,25 @@ function toGates(sides: EvalSide[], picked: EvalSide[], bf?: MarketQuote["betfai
   });
 }
 
-function basicTalk(sn: Snapshot, now?: OddsBoard | null): string {
+function shapeHeadline(sn: Snapshot): string {
   const sides = [
     { n: "主胜", p: sn.homeWin },
     { n: "平局", p: sn.draw },
     { n: "客胜", p: sn.awayWin },
   ].sort((a, b) => b.p - a.p);
-  let s = `更常出现的是${sides[0].n}。`;
-  s += sn.over25 >= sn.under25 ? "进球会稍多一点。" : "进球不会太多。";
+  const gap = sides[0].p - sides[1].p;
+  const strength = gap >= 18 ? "格局较清晰" : gap >= 8 ? "略有倾向" : "双方胶着";
+  const goals = sn.over25 >= 52 ? "进球略偏多" : sn.over25 <= 48 ? "进球略偏少" : "大小相对均衡";
+  return `${sides[0].n}更常见，${strength}，${goals}`;
+}
+
+function basicTalk(sn: Snapshot, now?: OddsBoard | null): string {
+  const parts: string[] = [];
   const hc = fmtSigned(now?.hhadLine);
-  if (hc) s += `竞彩让球是${hc}。`;
-  if (now && now.over > 1 && now.under > 1) s += "竞彩大小看 2.5。";
-  if (sn.topScores?.[0]) s += `情景比分中 ${sn.topScores[0].score} 的相对概率更高。`;
-  return s;
+  if (hc) parts.push(`竞彩让球是${hc}`);
+  if (now && now.over > 1 && now.under > 1) parts.push("竞彩大小看 2.5");
+  if (sn.topScores?.[0]) parts.push(`相对更常见的比分路径是 ${sn.topScores[0].score}`);
+  return parts.length ? `${parts.join("。")}。` : "";
 }
 
 function ValueMatrix({ had, ou, asia, picked }: { had: GateSide[]; ou: GateSide[]; asia: GateSide[]; picked: EvalSide[] }) {

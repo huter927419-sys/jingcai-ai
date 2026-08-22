@@ -43,7 +43,13 @@ export default function Results() {
     hadWrong: sum.hadWrong + Math.max(0, row.games - row.hit1x2),
     ouRight: sum.ouRight + row.hitOu,
     ouWrong: sum.ouWrong + Math.max(0, row.games - row.hitOu),
-  }), { hadRight: 0, hadWrong: 0, ouRight: 0, ouWrong: 0 });
+    hcRight: sum.hcRight + (row.hitHc || 0),
+    hcWrong: sum.hcWrong + Math.max(0, (row.gamesHc || 0) - (row.hitHc || 0)),
+    scoreRight: sum.scoreRight + (row.hitScore || 0),
+    scoreWrong: sum.scoreWrong + Math.max(0, (row.gamesScore || 0) - (row.hitScore || 0)),
+  }), { hadRight: 0, hadWrong: 0, ouRight: 0, ouWrong: 0, hcRight: 0, hcWrong: 0, scoreRight: 0, scoreWrong: 0 });
+  const showHc = totals.hcRight + totals.hcWrong > 0;
+  const showScore = totals.scoreRight + totals.scoreWrong > 0;
 
   return (
     <Layout>
@@ -51,7 +57,7 @@ export default function Results() {
         <div>
           <div className="eyebrow"><span /> PERFORMANCE AUDIT</div>
           <h1>赛后复盘中心</h1>
-          <div className="sub">所有赛前判断自动留档，以真实赛果持续检验研判表现</div>
+          <div className="sub">按开赛前最后一版解盘对账。有临场稿用临场，没有才用赛前，不以早盘改口前的判断充数。</div>
         </div>
       </div>
       <section className="proof-strip" aria-label="分析验证概览">
@@ -72,9 +78,11 @@ export default function Results() {
         </div>
       </section>
       <section className="audit-scoreboard" aria-label="分项对错统计">
-        <div className="audit-scoreboard-head"><span>分项核对</span><b>每个玩法单独判定，不合并成绩</b></div>
+        <div className="audit-scoreboard-head"><span>分项核对</span><b>有预测才进统计，没有的不计入</b></div>
         <AuditStat title="胜平负方向" right={totals.hadRight} wrong={totals.hadWrong} />
         <AuditStat title="大小球方向" right={totals.ouRight} wrong={totals.ouWrong} />
+        {showHc ? <AuditStat title="让球方向" right={totals.hcRight} wrong={totals.hcWrong} /> : null}
+        {showScore ? <AuditStat title="比分（命中任一）" right={totals.scoreRight} wrong={totals.scoreWrong} /> : null}
       </section>
       {err ? <div className="err">{err}</div> : null}
       {pending > 0 ? (
@@ -90,7 +98,7 @@ export default function Results() {
             <>
               {leader ? (
                 <p className="layer-talk" style={{ marginBottom: 16 }}>
-                  当前综合表现领先的是{leader.role}。下方按胜平负方向和大小球方向分别统计，对就是对 ✅，错就是错 ❌。
+                  当前综合表现领先的是{leader.role}。下方按已给出的预测分别统计，对就是对 ✅，错就是错 ❌；没写让球或比分的场次不进这两项。
                 </p>
               ) : null}
               <GroupBars
@@ -98,9 +106,16 @@ export default function Results() {
                 series={[
                   { name: "胜平负", color: "var(--win)" },
                   { name: "大小 2.5", color: "var(--draw)" },
+                  ...(showHc ? [{ name: "让球", color: "#3b82f6" }] : []),
+                  ...(showScore ? [{ name: "比分", color: "var(--lose)" }] : []),
                 ]}
                 categories={board.map((r) => r.role)}
-                values={board.map((r) => [r.rate1x2, r.rateOu])}
+                values={board.map((r) => [
+                  r.rate1x2,
+                  r.rateOu,
+                  ...(showHc ? [r.gamesHc ? r.rateHc : 0] : []),
+                  ...(showScore ? [r.gamesScore ? r.rateScore : 0] : []),
+                ])}
               />
               <div className="analyze-grid two" style={{ marginTop: 14 }}>
                 {board.map((r, i) => (
@@ -109,7 +124,7 @@ export default function Results() {
                       <strong>{r.role}</strong>
                       <span className="hud-chip">{r.games} 场样本</span>
                     </div>
-                    <div className="play-prices two">
+                    <div className={`play-prices ${showHc || showScore ? "quad" : "two"}`}>
                       <div>
                         <b>{r.games ? `${r.rate1x2.toFixed(0)}%` : "—"}</b>
                         <span>胜平负 · 对 ✅ {r.hit1x2} · 错 ❌ {Math.max(0, r.games - r.hit1x2)}</span>
@@ -118,6 +133,18 @@ export default function Results() {
                         <b>{r.games ? `${r.rateOu.toFixed(0)}%` : "—"}</b>
                         <span>大小球 · 对 ✅ {r.hitOu} · 错 ❌ {Math.max(0, r.games - r.hitOu)}</span>
                       </div>
+                      {showHc ? (
+                        <div>
+                          <b>{r.gamesHc ? `${r.rateHc.toFixed(0)}%` : "—"}</b>
+                          <span>让球 · 对 ✅ {r.hitHc || 0} · 错 ❌ {Math.max(0, (r.gamesHc || 0) - (r.hitHc || 0))}</span>
+                        </div>
+                      ) : null}
+                      {showScore ? (
+                        <div>
+                          <b>{r.gamesScore ? `${r.rateScore.toFixed(0)}%` : "—"}</b>
+                          <span>比分 · 对 ✅ {r.hitScore || 0} · 错 ❌ {Math.max(0, (r.gamesScore || 0) - (r.hitScore || 0))}</span>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ))}
@@ -182,6 +209,9 @@ function ResultCard({ it }: { it: SettledItem }) {
       </div>
       <div className="result-actual">
         实际 胜平负 {actual1x2.had} · 大小 {actual1x2.ou}
+        {it.actualHhad ? ` · 让球 ${it.actualHhad}${it.hhadLine ? `（${it.hhadLine}）` : ""}` : ""}
+        {it.score ? ` · 比分 ${it.score}` : ""}
+        {it.expertKind === "close" ? " · 按临场解盘" : it.expertKind === "open" ? " · 按赛前解盘" : ""}
       </div>
       <div className="result-picks">
         {it.takes.length ? (
@@ -195,6 +225,7 @@ function ResultCard({ it }: { it: SettledItem }) {
 }
 
 function roleLabel(t: ModelTake): string {
+  if (t.roleKey === "shape" || t.role === "基本盘分析师" || t.name === "基本盘") return "基本盘分析师";
   if (t.roleKey === "value" || t.role === "价值猎手") return "价值研判师";
   if (t.roleKey === "goals" || t.role === "进球专家") return "进球分析师";
   if (t.roleKey === "market" || t.role === "盘口专家") return "盘口分析师";
@@ -203,14 +234,19 @@ function roleLabel(t: ModelTake): string {
 }
 
 function PickRow({ t }: { t: ModelTake }) {
-  const both = t.hit1x2 && t.hitOu;
+  const marks = [t.hit1x2, t.hitOu, t.hitHc, t.hitScore].filter((x) => x != null);
+  const allHit = marks.length > 0 && marks.every(Boolean);
   return (
-    <div className={`result-pick${both ? " hit-all" : ""}`}>
+    <div className={`result-pick${allHit ? " hit-all" : ""}`}>
       <span className="result-who">
         {roleLabel(t)}
       </span>
-      <PickResult label="胜平负" pick={t.pick1x2} hit={t.hit1x2} />
-      <PickResult label="大小球" pick={t.pickOu} hit={t.hitOu} />
+      <div className="result-pick-markets">
+        <PickResult label="胜平负" pick={t.pick1x2} hit={t.hit1x2} />
+        <PickResult label="大小球" pick={t.pickOu} hit={t.hitOu} />
+        {t.pickHandicap ? <PickResult label="让球" pick={t.pickHandicap} hit={t.hitHc} /> : null}
+        {t.scores?.length ? <PickResult label="比分" pick={t.scores.join(" / ")} hit={t.hitScore} /> : null}
+      </div>
       {t.verdict ? <span className={`verdict v-${t.verdict}`}>{t.verdict}</span> : null}
     </div>
   );
@@ -218,6 +254,7 @@ function PickRow({ t }: { t: ModelTake }) {
 
 function PickResult({ label, pick, hit }: { label: string; pick?: string; hit?: boolean }) {
   if (!pick) return <span className="no-pick"><small>{label}</small><b>未预测</b></span>;
+  if (hit == null) return <span className="no-pick"><small>{label} · 预测 {pick}</small><b>未对账</b></span>;
   const right = hit === true;
   return <span className={`pick-result ${right ? "hit" : "miss"}`}><small>{label} · 预测 {pick}</small><b>{right ? "对 ✅" : "错 ❌"}</b></span>;
 }

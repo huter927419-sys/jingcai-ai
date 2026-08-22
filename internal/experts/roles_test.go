@@ -19,11 +19,11 @@ func TestNormAndGrade(t *testing.T) {
 		t.Fatal("norm")
 	}
 	take := storeTake("DeepSeek", 50, 25, 25, 60, 40, "胜", "大", "主推")
-	g := GradeTake(take, 2, 1)
+	g := GradeTake(take, 2, 1, "")
 	if !g.Hit1X2 || !g.HitOU || g.Points != 3 {
 		t.Fatalf("%+v", g)
 	}
-	miss := GradeTake(take, 0, 1)
+	miss := GradeTake(take, 0, 1, "")
 	if miss.Hit1X2 || miss.Points != -1 {
 		t.Fatalf("miss %+v", miss)
 	}
@@ -61,5 +61,31 @@ func TestBoardOrder(t *testing.T) {
 	})
 	if out[0].Name != "DeepSeek" || out[1].Name != "Claude" {
 		t.Fatalf("%+v", out)
+	}
+}
+
+func TestGradeHandicapAndScore(t *testing.T) {
+	take := store.ModelTake{
+		Name: "Grok", Pick1X2: "胜", PickOU: "小", Verdict: "可看",
+		PickHandicap: "让胜", Scores: []string{"2-0", "1-0"},
+	}
+	g := GradeTake(take, 2, 0, "-1")
+	if !g.HasHC || !g.HitHC || !g.HasScore || !g.HitScore {
+		t.Fatalf("cover %+v", g)
+	}
+	push := GradeTake(take, 1, 0, "-1")
+	if !push.HasHC || push.HitHC || !push.HitScore {
+		t.Fatalf("push %+v", push)
+	}
+	skip := GradeTake(store.ModelTake{Name: "Claude", PickHandicap: "放弃", Scores: []string{"胶着"}}, 1, 0, "-1")
+	if skip.HasHC || skip.HasScore {
+		t.Fatalf("empty should not count %+v", skip)
+	}
+	noLine := GradeTake(take, 2, 0, "")
+	if noLine.HasHC {
+		t.Fatal("no line should skip handicap")
+	}
+	if ActualHHAD(1, 0, -1) != "让平" || ActualHHAD(0, 0, 1) != "让胜" {
+		t.Fatal("actual hhad")
 	}
 }
