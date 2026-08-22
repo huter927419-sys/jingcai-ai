@@ -766,7 +766,7 @@ function ValueMatrix({ had, ou, asia, picked }: { had: GateSide[]; ou: GateSide[
       <div className="matrix-output">
         <div><span>优先方向</span><strong>{best?.label || "等待市场数据"}</strong></div>
         <div><span>候选方向</span><strong>{picked.map((s) => s.label).join(" · ") || "暂未形成"}</strong></div>
-        <div><span>执行提示</span><strong>{best?.verdict === "主推" ? "价格与方向共振，可优先考虑" : best?.verdict === "关注" || best?.verdict === "谨慎" || best?.verdict === "可看" ? "可以留意，不要急着买" : "定价不利，建议回避"}</strong></div>
+        <div><span>执行提示</span><strong>{best?.verdict === "主推" ? "价格与方向共振，可优先考虑" : best?.verdict === "关注" ? "可以留意，不要急着买" : "定价不利，建议回避"}</strong></div>
       </div>
       <div className="matrix-cards">
         <PrivateMarket title="胜平负" sides={had} />
@@ -785,6 +785,6 @@ function PrivateMarket({ title, sides }: { title: string; sides: GateSide[] }) {
 
 function rank(v: GateSide["verdict"]): number {
   if (v === "主推") return 2;
-  if (v === "关注" || v === "谨慎" || v === "可看" || v === "观望") return 1;
+  if (v === "关注") return 1;
   return 0;
 }
