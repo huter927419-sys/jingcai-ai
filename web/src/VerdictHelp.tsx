@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { IconHelpCircle } from "./Icons";
 
-export type VerdictLevel = "主推" | "可看" | "放弃" | "回避" | string;
+export type VerdictLevel = "主推" | "关注" | "谨慎" | "可看" | "观望" | "放弃" | "回避" | string;
 
 const EXPLANATIONS: Record<string, string> = {
   主推: "多项关键信号一致，当前具备优先参考条件，但不代表确定赛果。",
-  可看: "方向有依据但条件未完全确认，建议继续观察临场价格、阵容或盘口。",
+  关注: "可以留意，不要急着买。方向有依据，但价格或条件还不够。",
   回避: "当前价格、保护或拥挤风险不利，不建议作为参考买入方向。",
 };
 
 export function verdictLabel(verdict: VerdictLevel): string {
-  return verdict === "放弃" ? "回避" : verdict;
+  if (verdict === "放弃") return "回避";
+  if (verdict === "可看" || verdict === "观望" || verdict === "谨慎") return "关注";
+  return verdict;
 }
 
 export function VerdictHelp({ verdict }: { verdict: VerdictLevel }) {
@@ -38,9 +40,10 @@ export function VerdictHelp({ verdict }: { verdict: VerdictLevel }) {
 }
 
 export function VerdictBadge({ verdict }: { verdict: VerdictLevel }) {
+  const label = verdictLabel(verdict);
   return (
     <span className="verdict-pair">
-      <span className={`verdict v-${verdict}`}>{verdictLabel(verdict)}</span>
+      <span className={`verdict v-${label}`}>{label}</span>
       <VerdictHelp verdict={verdict} />
     </span>
   );

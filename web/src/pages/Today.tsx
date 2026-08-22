@@ -93,7 +93,7 @@ export default function Today() {
         <div className="reading-map-title"><span>READING PATH</span><h2>三层不要混成一句</h2><p>格局是分布，专家是解读，价值才是是否执行。</p></div>
         <div className="reading-step"><i><IconGauge size={18} /></i><div><em>01</em><b>先看比赛格局</b><small>结构分布说明更常怎么走，不是推荐</small></div></div>
         <div className="reading-step"><i><IconGrid size={18} /></i><div><em>02</em><b>再对照专家解盘</b><small>基本盘是基准，四位专家允许和它不一致</small></div></div>
-        <div className="reading-step signature"><i><IconScale size={18} /></i><div><em>03</em><b>最后看价值等级</b><small>主推、可看、回避才是是否执行</small></div></div>
+        <div className="reading-step signature"><i><IconScale size={18} /></i><div><em>03</em><b>最后看价值等级</b><small>主推、关注、回避才是是否执行</small></div></div>
       </section>
       <div className="toolbar">
         <div><b>赛事列表</b><span>{rows.length ? `共 ${rows.length} 场，点击赛事查看完整研判` : "等待今日赛程数据"}</span></div>

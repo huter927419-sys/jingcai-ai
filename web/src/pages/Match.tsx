@@ -696,8 +696,8 @@ function verdictOf(s: EvalSide, hot: boolean): GateSide["verdict"] {
   if (s.kellyBand === "紧" || s.value < 0) return "放弃";
   if (hot && s.kellyBand === "紧") return "放弃";
   if (s.value >= 3 && s.kellyBand !== "紧" && !hot) return "主推";
-  if (s.value >= 3 && s.kellyBand === "松") return "可看";
-  if (s.value >= 0 && s.kellyBand !== "紧" && !hot) return "可看";
+  if (s.value >= 3 && s.kellyBand === "松") return "关注";
+  if (s.value >= 0 && s.kellyBand !== "紧" && !hot) return "关注";
   return "放弃";
 }
 
@@ -755,7 +755,7 @@ function ValueMatrix({ had, ou, asia, picked }: { had: GateSide[]; ou: GateSide[
       </div>
       <div className="verdict-guide" aria-label="价值等级说明">
         <div className="main"><span>主推 <VerdictHelp verdict="主推" /></span><b>方向与价格共振</b><small>多项关键信号一致，当前具备优先执行条件</small></div>
-        <div className="watch"><span>可看 <VerdictHelp verdict="可看" /></span><b>方向成立，条件未齐</b><small>保留关注，等待更好价格或临场信号确认</small></div>
+        <div className="watch"><span>关注 <VerdictHelp verdict="关注" /></span><b>可以留意，不要急着买</b><small>方向成立，条件未齐，不建议现在执行</small></div>
         <div className="avoid"><span>回避 <VerdictHelp verdict="回避" /></span><b>当前不具备价值</b><small>价格、保护或拥挤风险不利，不建议执行</small></div>
       </div>
       <div className="matrix-signals">
@@ -766,7 +766,7 @@ function ValueMatrix({ had, ou, asia, picked }: { had: GateSide[]; ou: GateSide[
       <div className="matrix-output">
         <div><span>优先方向</span><strong>{best?.label || "等待市场数据"}</strong></div>
         <div><span>候选方向</span><strong>{picked.map((s) => s.label).join(" · ") || "暂未形成"}</strong></div>
-        <div><span>执行提示</span><strong>{best?.verdict === "主推" ? "价格与方向共振，可优先考虑" : best?.verdict === "可看" ? "方向成立，等待更好价格" : "定价不利，建议回避"}</strong></div>
+        <div><span>执行提示</span><strong>{best?.verdict === "主推" ? "价格与方向共振，可优先考虑" : best?.verdict === "关注" || best?.verdict === "谨慎" || best?.verdict === "可看" ? "可以留意，不要急着买" : "定价不利，建议回避"}</strong></div>
       </div>
       <div className="matrix-cards">
         <PrivateMarket title="胜平负" sides={had} />
@@ -785,6 +785,6 @@ function PrivateMarket({ title, sides }: { title: string; sides: GateSide[] }) {
 
 function rank(v: GateSide["verdict"]): number {
   if (v === "主推") return 2;
-  if (v === "可看") return 1;
+  if (v === "关注" || v === "谨慎" || v === "可看" || v === "观望") return 1;
   return 0;
 }

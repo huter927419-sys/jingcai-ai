@@ -623,7 +623,7 @@ h1 { font-size: 27px; font-weight: 720; color: var(--ink); margin: 0; letter-spa
   padding: 2px 8px;
 }
 .verdict.v-主推 { background: rgba(11, 150, 104, 0.1); color: #087a55; }
-.verdict.v-可看 { background: rgba(251, 191, 36, 0.16); color: #fbbf24; }
+.verdict.v-关注, .verdict.v-谨慎, .verdict.v-可看, .verdict.v-观望 { background: rgba(251, 191, 36, 0.16); color: #fbbf24; }
 .verdict.v-放弃 { background: rgba(251, 113, 133, 0.16); color: #fb7185; }
 .verdict-pair { display: inline-flex; align-items: center; gap: 4px; width: fit-content; }
 .verdict-help { position: relative; display: inline-flex; align-items: center; flex: 0 0 auto; vertical-align: middle; }
@@ -1063,7 +1063,7 @@ h1 { font-size: 27px; font-weight: 720; color: var(--ink); margin: 0; letter-spa
 .matrix-verdict small { color: #8d9ba7; font-size: 9px; margin-bottom: 5px; }
 .matrix-verdict strong { display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; font-size: 18px; }
 .matrix-verdict.v-主推 strong { color: #62dfaF; }
-.matrix-verdict.v-可看 strong { color: #efb649; }
+.matrix-verdict.v-关注 strong, .matrix-verdict.v-谨慎 strong, .matrix-verdict.v-可看 strong, .matrix-verdict.v-观望 strong { color: #efb649; }
 .matrix-verdict.v-放弃 strong { color: #ee7184; }
 .verdict-guide { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 17px; border: 1px solid rgba(255,255,255,.1); }
 .verdict-guide > div { display: grid; grid-template-columns: auto 1fr; gap: 2px 9px; padding: 12px 14px; border-right: 1px solid rgba(255,255,255,.1); }
@@ -1094,7 +1094,7 @@ h1 { font-size: 27px; font-weight: 720; color: var(--ink); margin: 0; letter-spa
 .private-market > div { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 7px 0; border-top: 1px solid rgba(255,255,255,.07); }
 .private-market b { color: #eef4f7; font-size: 11px; }
 .private-market em { display: inline-flex; align-items: center; font-style: normal; font-size: 10px; font-weight: 700; }
-.private-market em.v-主推 { color: #62dfaf; }.private-market em.v-可看 { color: #efb649; }.private-market em.v-放弃 { color: #ee7184; }
+.private-market em.v-主推 { color: #62dfaf; }.private-market em.v-关注, .private-market em.v-谨慎, .private-market em.v-可看, .private-market em.v-观望 { color: #efb649; }.private-market em.v-放弃 { color: #ee7184; }
 .private-market small { grid-column: 1 / -1; color: #7f8d99; font-size: 9px; }
 .private-market p { color: #7f8d99; font-size: 10px; }
 .matrix-foot { margin-top: 13px; color: #768590; font-size: 9px; }

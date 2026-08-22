@@ -326,7 +326,7 @@ export type GateSide = {
   kellyBand: string;
   hot: boolean;
   hotNote: string;
-  verdict: "主推" | "可看" | "放弃";
+  verdict: "主推" | "关注" | "放弃";
   picked?: boolean;
 };
 

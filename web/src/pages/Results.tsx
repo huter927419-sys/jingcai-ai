@@ -4,6 +4,7 @@ import { fetchExperts, fmtKick, type ExpertBoardRow, type ModelTake, type Settle
 import Layout from "../Layout";
 import { GroupBars } from "../Charts";
 import { IconChart, IconPulse, IconShield } from "../Icons";
+import { verdictLabel } from "../VerdictHelp";
 
 export default function Results() {
   const [board, setBoard] = useState<ExpertBoardRow[]>([]);
@@ -247,7 +248,7 @@ function PickRow({ t }: { t: ModelTake }) {
         {t.pickHandicap ? <PickResult label="让球" pick={t.pickHandicap} hit={t.hitHc} /> : null}
         {t.scores?.length ? <PickResult label="比分" pick={t.scores.join(" / ")} hit={t.hitScore} /> : null}
       </div>
-      {t.verdict ? <span className={`verdict v-${t.verdict}`}>{t.verdict}</span> : null}
+      {t.verdict ? <span className={`verdict v-${verdictLabel(t.verdict)}`}>{verdictLabel(t.verdict)}</span> : null}
     </div>
   );
 }

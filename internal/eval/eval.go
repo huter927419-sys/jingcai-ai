@@ -102,7 +102,7 @@ func asianAdvice(q *market.Quote, lh, la float64) *Advice {
 		talk = "建议走" + text + "的" + best.Label + "。"
 	} else if best.Value >= 0 && best.KellyBand != "紧" {
 		pick = best.Label
-		talk = text + "可看" + best.Label + "，空间一般。"
+		talk = text + "关注" + best.Label + "，空间一般。"
 	}
 	return &Advice{
 		Line:     q.Asian.Line,
