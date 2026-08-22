@@ -601,6 +601,10 @@ function roleTitle(role?: string, fallback?: string): string {
   if (role === "goals") return "进球分析师";
   if (role === "lineup") return "阵容分析师";
   if (role === "value") return "价值研判师";
+  if (fallback === "价值猎手") return "价值研判师";
+  if (fallback === "进球专家") return "进球分析师";
+  if (fallback === "盘口专家") return "盘口分析师";
+  if (fallback === "阵容专家") return "阵容分析师";
   return fallback || "专业研判";
 }
 

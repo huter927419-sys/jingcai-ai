@@ -42,12 +42,8 @@ func Decorate(t *store.ModelTake) {
 		return
 	}
 	r := Of(t.Name)
-	if t.Role == "" {
-		t.Role = r.Title
-	}
-	if t.RoleKey == "" {
-		t.RoleKey = r.Key
-	}
+	t.Role = r.Title
+	t.RoleKey = r.Key
 	t.Pick1X2 = Norm1X2(t.Pick1X2)
 	t.PickOU = NormOU(t.PickOU)
 	t.Verdict = NormVerdict(t.Verdict)

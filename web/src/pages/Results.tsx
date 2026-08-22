@@ -194,12 +194,20 @@ function ResultCard({ it }: { it: SettledItem }) {
   );
 }
 
+function roleLabel(t: ModelTake): string {
+  if (t.roleKey === "value" || t.role === "价值猎手") return "价值研判师";
+  if (t.roleKey === "goals" || t.role === "进球专家") return "进球分析师";
+  if (t.roleKey === "market" || t.role === "盘口专家") return "盘口分析师";
+  if (t.roleKey === "lineup" || t.role === "阵容专家") return "阵容分析师";
+  return t.role || "专业研判";
+}
+
 function PickRow({ t }: { t: ModelTake }) {
   const both = t.hit1x2 && t.hitOu;
   return (
     <div className={`result-pick${both ? " hit-all" : ""}`}>
       <span className="result-who">
-        {t.role || "专业研判"}
+        {roleLabel(t)}
       </span>
       <PickResult label="胜平负" pick={t.pick1x2} hit={t.hit1x2} />
       <PickResult label="大小球" pick={t.pickOu} hit={t.hitOu} />
