@@ -216,6 +216,14 @@ CREATE TABLE IF NOT EXISTS sfc_issues (
   fetched_at TEXT NOT NULL,
   matches_json TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS miss_reviews (
+  match_id INTEGER PRIMARY KEY,
+  generated_at TEXT NOT NULL,
+  miss_kind TEXT NOT NULL,
+  model TEXT,
+  result_json TEXT NOT NULL,
+  FOREIGN KEY (match_id) REFERENCES matches(id)
+);
 `)
 	if err != nil {
 		return err
@@ -682,4 +690,95 @@ func WeekStart(now time.Time) time.Time {
 	since := (int(now.Weekday()) + 3) % 7
 	day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	return day.AddDate(0, 0, -since)
+}
+
+type MissReview struct {
+	MatchID       int64
+	GeneratedAt   time.Time
+	MissKind      string
+	Model         string
+	Headline      string
+	PlainTalk     string
+	VisibleBefore []string
+	Overread      []string
+	Lesson        string
+}
+
+type persistedReview struct {
+	Headline      string   `json:"headline"`
+	PlainTalk     string   `json:"plainTalk"`
+	VisibleBefore []string `json:"visibleBefore,omitempty"`
+	Overread      []string `json:"overread,omitempty"`
+	Lesson        string   `json:"lesson,omitempty"`
+}
+
+func (s *Store) ListFinishedOnBusinessDate(day string) ([]MatchRow, error) {
+	rows, err := s.DB.Query(matchSelect+`
+WHERE m.home_goals IS NOT NULL AND m.away_goals IS NOT NULL AND m.business_date=?`+jingcaiOnly+`
+ORDER BY m.kickoff ASC
+`, day)
+	if err != nil {
+		return nil, err
+	}
+	return scanMatches(rows)
+}
+
+func (s *Store) SaveMissReview(r MissReview) error {
+	if r.MatchID == 0 {
+		return fmt.Errorf("missing match")
+	}
+	if r.GeneratedAt.IsZero() {
+		r.GeneratedAt = time.Now()
+	}
+	raw, err := json.Marshal(persistedReview{
+		Headline: r.Headline, PlainTalk: r.PlainTalk,
+		VisibleBefore: r.VisibleBefore, Overread: r.Overread, Lesson: r.Lesson,
+	})
+	if err != nil {
+		return err
+	}
+	_, err = s.DB.Exec(`
+INSERT INTO miss_reviews (match_id, generated_at, miss_kind, model, result_json)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(match_id) DO UPDATE SET
+  generated_at=excluded.generated_at,
+  miss_kind=excluded.miss_kind,
+  model=excluded.model,
+  result_json=excluded.result_json
+`, r.MatchID, r.GeneratedAt.Format(time.RFC3339), r.MissKind, r.Model, string(raw))
+	return err
+}
+
+func (s *Store) GetMissReview(id int64) (*MissReview, error) {
+	var generated, kind, model, raw string
+	err := s.DB.QueryRow(`SELECT generated_at, miss_kind, model, result_json FROM miss_reviews WHERE match_id=?`, id).Scan(&generated, &kind, &model, &raw)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return decodeMissReview(id, generated, kind, model, raw)
+}
+
+func (s *Store) HasMissReview(id int64) (bool, error) {
+	var n int
+	err := s.DB.QueryRow(`SELECT COUNT(1) FROM miss_reviews WHERE match_id=?`, id).Scan(&n)
+	return n > 0, err
+}
+
+func decodeMissReview(id int64, generated, kind, model, raw string) (*MissReview, error) {
+	var body persistedReview
+	if err := json.Unmarshal([]byte(raw), &body); err != nil {
+		return nil, err
+	}
+	r := &MissReview{
+		MatchID: id, MissKind: kind, Model: model,
+		Headline: body.Headline, PlainTalk: body.PlainTalk,
+		VisibleBefore: body.VisibleBefore, Overread: body.Overread, Lesson: body.Lesson,
+	}
+	if t, err := time.Parse(time.RFC3339, generated); err == nil {
+		r.GeneratedAt = t
+	}
+	return r, nil
 }

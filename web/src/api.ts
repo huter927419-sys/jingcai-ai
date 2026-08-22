@@ -257,6 +257,22 @@ export type ExpertBoardRow = {
   points: number;
 };
 
+export type RiskHint = {
+  key: string;
+  title: string;
+  detail: string;
+};
+
+export type MissReview = {
+  kind: string;
+  headline: string;
+  plainTalk: string;
+  visibleBefore?: string[];
+  overread?: string[];
+  lesson?: string;
+  generatedAt?: string;
+};
+
 export type SettledItem = {
   match: MatchRow;
   score: string;
@@ -264,13 +280,15 @@ export type SettledItem = {
   actualHhad?: string;
   expertKind?: "open" | "close";
   takes: ModelTake[];
+  riskHints?: RiskHint[];
+  missReview?: MissReview | null;
 };
 
-export async function fetchExperts(): Promise<{ board: ExpertBoardRow[]; yesterday: SettledItem[]; settled: SettledItem[]; pending: number }> {
+export async function fetchExperts(): Promise<{ board: ExpertBoardRow[]; yesterday: SettledItem[]; settled: SettledItem[]; pending: number; riskTrialUntil?: string }> {
   const r = await fetch("/api/experts");
   if (!r.ok) throw new Error("experts failed");
   const j = await r.json();
-  return { board: j.board ?? [], yesterday: j.yesterday ?? [], settled: j.settled ?? [], pending: Number(j.pending ?? 0) };
+  return { board: j.board ?? [], yesterday: j.yesterday ?? [], settled: j.settled ?? [], pending: Number(j.pending ?? 0), riskTrialUntil: j.riskTrialUntil };
 }
 
 export type MatchDetail = {
@@ -284,6 +302,9 @@ export type MatchDetail = {
   market?: MarketQuote | null;
   preview?: TeamPreview | null;
   expertKind?: "open" | "close";
+  riskHints?: RiskHint[];
+  riskTrialUntil?: string;
+  missReview?: MissReview | null;
 };
 
 export type PlayerXI = { no?: string; name: string; pos?: string };

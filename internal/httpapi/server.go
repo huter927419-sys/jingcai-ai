@@ -487,17 +487,28 @@ func (s *Server) match(w http.ResponseWriter, r *http.Request) {
 		oddsClose = eval.BoardFromJSON(closeSn.OddsJSON)
 	}
 	gradeTakes(pub.Takes, m, hhadLineOf(pub.Odds, oddsOpen, oddsClose))
+	hintSn := sn
+	if expertKind == store.KindOpen && open != nil {
+		hintSn = open
+	}
+	var hints []experts.RiskHint
+	if m.Origin != "sfc" {
+		hints = experts.CollectRiskHints(pub.Takes, hintSn, prev)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"match":      m,
-		"available":  kinds,
-		"status":     statusOfMatch(m, sn.Kind),
-		"source":     "sqlite",
-		"snapshot":   pub,
-		"oddsOpen":   oddsOpen,
-		"oddsClose":  oddsClose,
-		"market":     q,
-		"preview":    prev,
-		"expertKind": expertKind,
+		"match":          m,
+		"available":      kinds,
+		"status":         statusOfMatch(m, sn.Kind),
+		"source":         "sqlite",
+		"snapshot":       pub,
+		"oddsOpen":       oddsOpen,
+		"oddsClose":      oddsClose,
+		"market":         q,
+		"preview":        prev,
+		"expertKind":     expertKind,
+		"riskHints":      hints,
+		"riskTrialUntil": experts.TrialUntil,
+		"missReview":     publicMissReview(s.Store, m.ID),
 	})
 }
 
@@ -535,6 +546,8 @@ func (s *Server) experts(w http.ResponseWriter, r *http.Request) {
 		ActualHHAD string             `json:"actualHhad,omitempty"`
 		ExpertKind store.SnapshotKind `json:"expertKind,omitempty"`
 		Takes      []store.ModelTake  `json:"takes"`
+		RiskHints  []experts.RiskHint `json:"riskHints,omitempty"`
+		MissReview any                `json:"missReview,omitempty"`
 	}
 	recent := make([]item, 0, len(settled))
 	yesterday := make([]item, 0)
@@ -607,6 +620,11 @@ func (s *Server) experts(w http.ResponseWriter, r *http.Request) {
 		}
 		if sn != nil {
 			it.ExpertKind = sn.Kind
+			if m.Origin != "sfc" {
+				prev, _ := s.Store.GetPreview(m.ID)
+				it.RiskHints = experts.CollectRiskHints(takes, sn, prev)
+			}
+			it.MissReview = publicMissReview(s.Store, m.ID)
 		}
 		if m.BusinessDate == yestBiz {
 			yesterday = append(yesterday, it)
@@ -628,12 +646,13 @@ func (s *Server) experts(w http.ResponseWriter, r *http.Request) {
 		rows = append(rows, *r)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"board":     experts.Board(rows),
-		"yesterday": yesterday,
-		"settled":   recent,
-		"pending":   pending,
-		"weekFrom":  from.Format("2006-01-02"),
-		"source":    "sqlite",
+		"board":          experts.Board(rows),
+		"yesterday":      yesterday,
+		"settled":        recent,
+		"pending":        pending,
+		"weekFrom":       from.Format("2006-01-02"),
+		"source":         "sqlite",
+		"riskTrialUntil": experts.TrialUntil,
 	})
 }
 
@@ -685,6 +704,25 @@ func statusOf(k store.SnapshotKind) string {
 		return "临场"
 	}
 	return "赛前"
+}
+
+func publicMissReview(st *store.Store, id int64) any {
+	if st == nil {
+		return nil
+	}
+	r, err := st.GetMissReview(id)
+	if err != nil || r == nil || strings.TrimSpace(r.PlainTalk) == "" {
+		return nil
+	}
+	return map[string]any{
+		"kind":          r.MissKind,
+		"headline":      r.Headline,
+		"plainTalk":     r.PlainTalk,
+		"visibleBefore": r.VisibleBefore,
+		"overread":      r.Overread,
+		"lesson":        r.Lesson,
+		"generatedAt":   r.GeneratedAt,
+	}
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

@@ -61,9 +61,44 @@ func (c *Client) Enabled() bool {
 	return c != nil && c.Key != ""
 }
 
-func (c *Client) Analyze(prompt string) (out Output, err error) {
+func (c *Client) Analyze(prompt string) (Output, error) {
+	maxTokens := 800
+	if strings.Contains(strings.ToLower(c.Model), "claude") {
+		maxTokens = 1600
+	}
+	var out Output
+	if err := c.chatJSON(c.systemText(), prompt, maxTokens, &out); err != nil {
+		return Output{}, err
+	}
+	if out.LambdaHome < 0.15 || out.LambdaAway < 0.15 {
+		return Output{}, fmt.Errorf("%s lambda invalid", c.tag())
+	}
+	return out, nil
+}
+
+type ReviewOut struct {
+	Headline      string   `json:"headline"`
+	PlainTalk     string   `json:"plain_talk"`
+	MissType      string   `json:"miss_type"`
+	VisibleBefore []string `json:"visible_before"`
+	Overread      []string `json:"overread"`
+	Lesson        string   `json:"lesson"`
+}
+
+func (c *Client) Review(prompt string) (ReviewOut, error) {
+	var out ReviewOut
+	if err := c.chatJSON(reviewSystem, prompt, 1400, &out); err != nil {
+		return ReviewOut{}, err
+	}
+	if strings.TrimSpace(out.PlainTalk) == "" {
+		return ReviewOut{}, fmt.Errorf("%s empty review", c.tag())
+	}
+	return out, nil
+}
+
+func (c *Client) chatJSON(system, prompt string, maxTokens int, dest any) (err error) {
 	if !c.Enabled() {
-		return Output{}, fmt.Errorf("no api key")
+		return fmt.Errorf("no api key")
 	}
 	started := time.Now()
 	requestID := fmt.Sprintf("%d-%06d", started.UnixMilli(), requestSequence.Add(1))
@@ -94,15 +129,14 @@ func (c *Client) Analyze(prompt string) (out Output, err error) {
 		}
 		c.Audit.Log(event)
 	}()
-	maxTokens := 800
-	if strings.Contains(strings.ToLower(c.Model), "claude") {
-		maxTokens = 1600
+	if maxTokens < 200 {
+		maxTokens = 800
 	}
 	body := map[string]any{
 		"model":      c.Model,
 		"max_tokens": maxTokens,
 		"messages": []map[string]string{
-			{"role": "system", "content": c.systemText()},
+			{"role": "system", "content": system},
 			{"role": "user", "content": prompt},
 		},
 	}
@@ -116,7 +150,7 @@ func (c *Client) Analyze(prompt string) (out Output, err error) {
 	requestBody = string(raw)
 	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(raw))
 	if err != nil {
-		return Output{}, err
+		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+c.Key)
 	req.Header.Set("Content-Type", "application/json")
@@ -124,19 +158,19 @@ func (c *Client) Analyze(prompt string) (out Output, err error) {
 	stage = "http_request"
 	res, err := c.HTTP.Do(req)
 	if err != nil {
-		return Output{}, err
+		return err
 	}
 	defer res.Body.Close()
 	status = res.StatusCode
 	stage = "response_read"
 	respBody, err := io.ReadAll(res.Body)
 	if err != nil {
-		return Output{}, err
+		return err
 	}
 	responseBody = string(respBody)
 	if res.StatusCode >= 300 {
 		stage = "http_status"
-		return Output{}, fmt.Errorf("%s HTTP %d: %s", c.tag(), res.StatusCode, truncate(string(respBody), 400))
+		return fmt.Errorf("%s HTTP %d: %s", c.tag(), res.StatusCode, truncate(string(respBody), 400))
 	}
 	stage = "response_envelope"
 	var parsed struct {
@@ -147,10 +181,10 @@ func (c *Client) Analyze(prompt string) (out Output, err error) {
 		} `json:"choices"`
 	}
 	if err := json.Unmarshal(respBody, &parsed); err != nil {
-		return Output{}, err
+		return err
 	}
 	if len(parsed.Choices) == 0 {
-		return Output{}, fmt.Errorf("%s empty choices", c.tag())
+		return fmt.Errorf("%s empty choices", c.tag())
 	}
 	stage = "response_content"
 	content := strings.TrimSpace(parsed.Choices[0].Message.Content)
@@ -165,16 +199,22 @@ func (c *Client) Analyze(prompt string) (out Output, err error) {
 		}
 	}
 	stage = "response_json"
-	if err := json.Unmarshal([]byte(content), &out); err != nil {
-		return Output{}, fmt.Errorf("%s json: %w (%s)", c.tag(), err, truncate(content, 240))
-	}
-	stage = "response_validation"
-	if out.LambdaHome < 0.15 || out.LambdaAway < 0.15 {
-		return Output{}, fmt.Errorf("%s lambda invalid", c.tag())
+	if err := json.Unmarshal([]byte(content), dest); err != nil {
+		return fmt.Errorf("%s json: %w (%s)", c.tag(), err, truncate(content, 240))
 	}
 	stage = "complete"
-	return out, nil
+	return nil
 }
+
+const reviewSystem = `你是复盘分析师，只做赛后归因，不改写赛前结论，不下新的买入指令。
+只输出 JSON：
+{"headline":"不超过22字","miss_type":"全错或胜平负看错","plain_talk":"220-340字","visible_before":["事前能看到的信号"],"overread":["赛前被读过头的信号"],"lesson":"不超过40字的一条教训"}
+硬性规定：
+- 用赛前已经存在的票面、近况、专家选项和风险提示解释为什么看错，禁止用赛果倒推“早该看出来”。
+- 没有的资料写未确认，严禁编造伤停、换人和内部消息。
+- headline、plain_talk、lesson 禁止出现：AI、模型名、凯利、价值差、泊松、xG、λ、去水、立即抓取。
+- 不要推荐下一场怎么买。不要把冷门说成可以预判。
+- visible_before 和 overread 各最多 4 条，没有就给空数组。`
 
 func (c *Client) systemText() string {
 	if c != nil && strings.Contains(strings.ToLower(c.Model), "claude") {

@@ -69,6 +69,13 @@ func (s *Scheduler) Start() error {
 	}); err != nil {
 		return err
 	}
+	if _, err := s.cron.AddFunc("0 5 12 * * *", func() {
+		if err := s.ReviewMisses(); err != nil {
+			log.Printf("miss review: %v", err)
+		}
+	}); err != nil {
+		return err
+	}
 	s.cron.Start()
 	go func() {
 		if err := s.Store.PruneOlderThan(time.Now().Add(-14 * 24 * time.Hour)); err != nil {
@@ -89,6 +96,9 @@ func (s *Scheduler) Start() error {
 		if err := s.RefreshSFCAndExperts(); err != nil {
 			log.Printf("sfc: %v", err)
 		}
+		if err := s.ReviewMisses(); err != nil {
+			log.Printf("miss review: %v", err)
+		}
 	}()
 	return nil
 }
@@ -101,6 +111,17 @@ func (s *Scheduler) Stop() {
 		close(ch)
 		delete(s.closes, id)
 	}
+}
+
+func (s *Scheduler) ReviewMisses() error {
+	if s.Engine == nil {
+		return nil
+	}
+	now := time.Now()
+	if s.Location != nil {
+		now = now.In(s.Location)
+	}
+	return s.Engine.ReviewMisses(now)
 }
 
 func (s *Scheduler) DailyOpen() error {

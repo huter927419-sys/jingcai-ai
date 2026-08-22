@@ -33,6 +33,8 @@ import {
 import { IconBack, IconBall, IconChart, IconClock, IconGauge, IconGrid, IconScale, IconTalk } from "../Icons";
 import { LineupBoard } from "../Lineup";
 import { VerdictBadge, VerdictHelp, verdictLabel } from "../VerdictHelp";
+import { UpsetHintList } from "../UpsetHints";
+import { MissReviewCard } from "../MissReview";
 
 export default function Match() {
   const { id } = useParams();
@@ -230,6 +232,9 @@ export default function Match() {
               odds={now}
               finished={!!m.finished}
               score={m.finished && m.homeGoals != null && m.awayGoals != null ? `${m.homeGoals}-${m.awayGoals}` : ""}
+              hints={data.riskHints}
+              trialUntil={data.riskTrialUntil}
+              review={data.missReview}
             />
             <RiskNotice strong>以上分析和参考买入仅供信息研究，不构成收益保证。请结合自身判断审慎决策，由此产生的相关风险与结果由使用者自行承担。</RiskNotice>
           </Layer>
@@ -298,12 +303,18 @@ function AICompare({
   odds,
   finished,
   score,
+  hints,
+  trialUntil,
+  review,
 }: {
   sn: Snapshot;
   numStr?: string;
   odds?: OddsBoard | null;
   finished?: boolean;
   score?: string;
+  hints?: MatchDetail["riskHints"];
+  trialUntil?: string;
+  review?: MatchDetail["missReview"];
 }) {
   const takes = sn.takes ?? [];
   const cards = takes.slice();
@@ -320,6 +331,8 @@ function AICompare({
       ) : (
         <>
           {voices.length ? <TradePlan sn={sn} cards={voices} odds={odds} /> : <p className="pred muted">四位专家还在生成。下方先看盘面基准。</p>}
+          <UpsetHintList hints={hints} until={trialUntil} />
+          <MissReviewCard review={review} />
           <GroupBars
             title="专家各自的胜平负判断"
             series={series}

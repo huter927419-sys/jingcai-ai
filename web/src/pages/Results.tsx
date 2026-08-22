@@ -5,12 +5,14 @@ import Layout from "../Layout";
 import { GroupBars } from "../Charts";
 import { IconChart, IconPulse, IconShield } from "../Icons";
 import { verdictLabel } from "../VerdictHelp";
+import { trialUntilLabel, UpsetHintList } from "../UpsetHints";
 
 export default function Results() {
   const [board, setBoard] = useState<ExpertBoardRow[]>([]);
   const [yesterday, setYesterday] = useState<SettledItem[]>([]);
   const [settled, setSettled] = useState<SettledItem[]>([]);
   const [pending, setPending] = useState(0);
+  const [trialUntil, setTrialUntil] = useState("");
   const [err, setErr] = useState("");
 
   useEffect(() => {
@@ -23,6 +25,7 @@ export default function Results() {
           setYesterday(j.yesterday);
           setSettled(j.settled);
           setPending(j.pending);
+          setTrialUntil(j.riskTrialUntil || "");
         })
         .catch((e) => {
           if (!alive) return;
@@ -58,7 +61,7 @@ export default function Results() {
         <div>
           <div className="eyebrow"><span /> PERFORMANCE AUDIT</div>
           <h1>赛后复盘中心</h1>
-          <div className="sub">按开赛前最后一版解盘对账。有临场稿用临场，没有才用赛前，不以早盘改口前的判断充数。</div>
+          <div className="sub">按开赛前最后一版解盘对账。有临场稿用临场，没有才用赛前，不以早盘改口前的判断充数。冷门风险提示试验观察到{trialUntilLabel(trialUntil)}，只标风险，不改结论。</div>
         </div>
       </div>
       <section className="proof-strip" aria-label="分析验证概览">
@@ -157,9 +160,9 @@ export default function Results() {
             </p>
           )}
           {yesterday.length ? (
-            <ResultList title="昨日核对" items={yesterday} />
+            <ResultList title="昨日核对" items={yesterday} until={trialUntil} />
           ) : null}
-          <ResultList title={yesterday.length ? "最近完场" : "完场对账"} items={settled} />
+          <ResultList title={yesterday.length ? "最近完场" : "完场对账"} items={settled} until={trialUntil} />
         </>
       )}
     </Layout>
@@ -178,20 +181,20 @@ function AuditStat({ title, right, wrong }: { title: string; right: number; wron
   );
 }
 
-function ResultList({ title, items }: { title: string; items: SettledItem[] }) {
+function ResultList({ title, items, until }: { title: string; items: SettledItem[]; until?: string }) {
   return (
     <div className="block" style={{ marginTop: 18 }}>
       <div className="block-h">{title}</div>
       <div className="list">
         {items.map((it) => (
-          <ResultCard key={it.match.id} it={it} />
+          <ResultCard key={it.match.id} it={it} until={until} />
         ))}
       </div>
     </div>
   );
 }
 
-function ResultCard({ it }: { it: SettledItem }) {
+function ResultCard({ it, until }: { it: SettledItem; until?: string }) {
   const actual1x2 = actualOf(it.score);
   return (
     <Link className="match-card result-card" to={`/matches/${it.match.id}`}>
@@ -214,6 +217,8 @@ function ResultCard({ it }: { it: SettledItem }) {
         {it.score ? ` · 比分 ${it.score}` : ""}
         {it.expertKind === "close" ? " · 按临场解盘" : it.expertKind === "open" ? " · 按赛前解盘" : ""}
       </div>
+      <UpsetHintList hints={it.riskHints} until={until} compact />
+      {it.missReview?.kind ? <div className="miss-review-flag">{it.missReview.kind} · 复盘分析师已写</div> : null}
       <div className="result-picks">
         {it.takes.length ? (
           it.takes.map((t) => <PickRow key={t.name} t={t} />)
