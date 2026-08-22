@@ -20,7 +20,7 @@ func voices(picks ...string) []store.ModelTake {
 	names := []string{"Grok", "ChatGPT", "Claude", "DeepSeek"}
 	out := make([]store.ModelTake, 0, len(picks))
 	for i, p := range picks {
-		out = append(out, store.ModelTake{Name: names[i], Pick1X2: p, Verdict: "关注"})
+		out = append(out, store.ModelTake{Name: names[i], Pick1X2: p, Verdict: "谨慎"})
 	}
 	return out
 }

@@ -5,13 +5,13 @@ export type VerdictLevel = "主推" | "关注" | "谨慎" | "可看" | "观望" 
 
 const EXPLANATIONS: Record<string, string> = {
   主推: "多项关键信号一致，当前具备优先参考条件，但不代表确定赛果。",
-  关注: "可以留意，不要急着买。方向有依据，但价格或条件还不够。",
+  谨慎: "可以留意，不要急着买。方向有依据，但价格或条件还不够。",
   回避: "当前价格、保护或拥挤风险不利，不建议作为参考买入方向。",
 };
 
 export function verdictLabel(verdict: VerdictLevel): string {
   if (verdict === "放弃") return "回避";
-  if (verdict === "可看" || verdict === "观望" || verdict === "谨慎") return "关注";
+  if (verdict === "可看" || verdict === "观望" || verdict === "关注") return "谨慎";
   return verdict;
 }
 

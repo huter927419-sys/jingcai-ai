@@ -68,7 +68,7 @@ func Decorate(t *store.ModelTake) {
 		return
 	}
 	if t.Verdict == "" {
-		t.Verdict = "关注"
+		t.Verdict = "谨慎"
 	}
 	if strings.TrimSpace(t.BuyTalk) == "" {
 		t.BuyTalk = DefaultAdvice(*t)
@@ -84,7 +84,7 @@ func DefaultAdvice(t store.ModelTake) string {
 	if t.Verdict == "主推" {
 		return fmt.Sprintf("参考买入：主方向%s，次方向%s；当前信号达到主推等级，临场若出现退盘或核心首发变化则降低等级。", had, ou)
 	}
-	return fmt.Sprintf("参考买入：主方向%s，次方向%s；当前为关注等级，可以留意但不宜急于执行，建议等待临场盘价和首发进一步确认。", had, ou)
+	return fmt.Sprintf("参考买入：主方向%s，次方向%s；当前为谨慎等级，可以留意但不宜急于执行，建议等待临场盘价和首发进一步确认。", had, ou)
 }
 
 func Norm1X2(s string) string {
@@ -119,7 +119,7 @@ func NormVerdict(s string) string {
 	case "主推":
 		return "主推"
 	case "关注", "谨慎", "观望", "可看", "观察":
-		return "关注"
+		return "谨慎"
 	case "放弃", "回避":
 		return "放弃"
 	default:

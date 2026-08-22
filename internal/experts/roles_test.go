@@ -15,7 +15,7 @@ func storeTake(name string, h, d, a, o, u float64, p1, pou, v string) store.Mode
 }
 
 func TestNormAndGrade(t *testing.T) {
-	if Norm1X2("home") != "胜" || NormOU("over") != "大" || NormVerdict("主推") != "主推" || NormVerdict("可看") != "关注" {
+	if Norm1X2("home") != "胜" || NormOU("over") != "大" || NormVerdict("主推") != "主推" || NormVerdict("可看") != "谨慎" {
 		t.Fatal("norm")
 	}
 	take := storeTake("DeepSeek", 50, 25, 25, 60, 40, "胜", "大", "主推")
@@ -32,7 +32,7 @@ func TestNormAndGrade(t *testing.T) {
 func TestFillPicksFromShape(t *testing.T) {
 	take := storeTake("Grok", 20, 22, 58, 30, 70, "", "", "")
 	Decorate(&take)
-	if take.Role != "盘口分析师" || take.RoleKey != "market" || take.Pick1X2 != "负" || take.PickOU != "小" || take.Verdict != "关注" {
+	if take.Role != "盘口分析师" || take.RoleKey != "market" || take.Pick1X2 != "负" || take.PickOU != "小" || take.Verdict != "谨慎" {
 		t.Fatalf("%+v", take)
 	}
 	if !strings.HasPrefix(take.BuyTalk, "参考买入：") || !strings.Contains(take.BuyTalk, "临场") {
